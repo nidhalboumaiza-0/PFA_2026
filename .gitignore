@@ -1,0 +1,69 @@
+# ===========================================
+# E-Santé Project - Git Ignore
+# ONLY ignoring packages/dependencies
+# .env files ARE tracked for team collaboration
+# ===========================================
+
+# Node.js dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+*.build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE specific (optional)
+.idea/
+*.iml
+.vscode/settings.json
+
+# Flutter/Dart specific
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+*.g.dart
+*.freezed.dart
+
+# Android specific
+*.apk
+*.aab
+*.dex
+*.class
+local.properties
+*.keystore
+!debug.keystore
+
+# iOS specific
+*.ipa
+Pods/
+.symlinks/
+Flutter/Flutter.podspec
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# ===========================================
+# IMPORTANT: .env files are NOT ignored
+# They are tracked so teammates can run the project
+# ===========================================

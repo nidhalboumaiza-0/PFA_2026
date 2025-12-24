@@ -1,0 +1,140 @@
+import 'package:medical_app/features/authentication/domain/entities/user_entity.dart';
+
+class PatientEntity extends UserEntity {
+  final String? antecedent;
+  // New fields from MongoDB schema
+  final String? bloodType;
+  final double? height;
+  final double? weight;
+  final List<String>? allergies;
+  final List<String>? chronicDiseases;
+  final Map<String, dynamic>? emergencyContact;
+  final Map<String, dynamic>? insuranceInfo;
+
+  PatientEntity({
+    String? id,
+    required String name,
+    required String lastName,
+    required String email,
+    required String role,
+    required String gender,
+    required String phoneNumber,
+    DateTime? dateOfBirth,
+    this.antecedent,
+    bool? accountStatus,
+    bool? isEmailVerified,
+    bool? isActive,
+    DateTime? lastLogin,
+    Map<String, String?>? address,
+    Map<String, dynamic>? location,
+    String? profilePicture,
+    bool? isOnline,
+    String? oneSignalPlayerId,
+    String? passwordResetCode,
+    DateTime? passwordResetExpires,
+    String? refreshToken,
+    this.bloodType,
+    this.height,
+    this.weight,
+    this.allergies,
+    this.chronicDiseases,
+    this.emergencyContact,
+    this.insuranceInfo,
+  }) : super(
+         id: id,
+         name: name,
+         lastName: lastName,
+         email: email,
+         role: role,
+         gender: gender,
+         phoneNumber: phoneNumber,
+         dateOfBirth: dateOfBirth,
+         accountStatus: accountStatus,
+         isEmailVerified: isEmailVerified,
+         isActive: isActive,
+         lastLogin: lastLogin,
+         address: address,
+         location: location,
+         profilePicture: profilePicture,
+         isOnline: isOnline,
+         oneSignalPlayerId: oneSignalPlayerId,
+         passwordResetCode: passwordResetCode,
+         passwordResetExpires: passwordResetExpires,
+         refreshToken: refreshToken,
+       );
+
+  factory PatientEntity.create({
+    String? id,
+    required String name,
+    required String lastName,
+    required String email,
+    required String role,
+    required String gender,
+    required String phoneNumber,
+    DateTime? dateOfBirth,
+    String? antecedent,
+    bool? accountStatus,
+    bool? isEmailVerified,
+    bool? isActive,
+    DateTime? lastLogin,
+    Map<String, String?>? address,
+    Map<String, dynamic>? location,
+    String? profilePicture,
+    bool? isOnline,
+    String? oneSignalPlayerId,
+    String? passwordResetCode,
+    DateTime? passwordResetExpires,
+    String? refreshToken,
+    String? bloodType,
+    double? height,
+    double? weight,
+    List<String>? allergies,
+    List<String>? chronicDiseases,
+    Map<String, dynamic>? emergencyContact,
+    Map<String, dynamic>? insuranceInfo,
+  }) {
+    return PatientEntity(
+      id: id,
+      name: name,
+      lastName: lastName,
+      email: email,
+      role: role,
+      gender: gender,
+      phoneNumber: phoneNumber,
+      dateOfBirth: dateOfBirth,
+      antecedent: antecedent,
+      accountStatus: accountStatus,
+      isEmailVerified: isEmailVerified,
+      isActive: isActive,
+      lastLogin: lastLogin,
+      address: address,
+      location: location,
+      profilePicture: profilePicture,
+      isOnline: isOnline,
+      oneSignalPlayerId: oneSignalPlayerId,
+      passwordResetCode: passwordResetCode,
+      passwordResetExpires: passwordResetExpires,
+      refreshToken: refreshToken,
+      bloodType: bloodType,
+      height: height,
+      weight: weight,
+      allergies: allergies,
+      chronicDiseases: chronicDiseases,
+      emergencyContact: emergencyContact,
+      insuranceInfo: insuranceInfo,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    ...super.props,
+    antecedent,
+    bloodType,
+    height,
+    weight,
+    allergies,
+    chronicDiseases,
+    emergencyContact,
+    insuranceInfo,
+  ];
+}

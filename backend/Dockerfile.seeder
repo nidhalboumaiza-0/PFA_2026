@@ -1,0 +1,12 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install curl and bash for health checks
+RUN apk add --no-cache curl bash
+
+# Copy seeder script
+COPY seed-consul.js .
+
+# Run the seeder
+CMD ["node", "seed-consul.js"]

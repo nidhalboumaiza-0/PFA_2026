@@ -1,0 +1,410 @@
+# E-Santé Production Docker Compose
+# Use this for production/staging environments and Kubernetes simulation
+# 
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d --build
+#
+# For Kubernetes migration, convert with:
+#   kompose convert -f docker-compose.prod.yml
+
+services:
+  # ==================== INFRASTRUCTURE ====================
+  
+  mongodb:
+    image: mongo:6
+    container_name: esante-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - esante-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: esante-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - esante-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: esante-zookeeper
+    restart: always
+    networks:
+      - esante-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  kafka:
+    image: wurstmeister/kafka
+    container_name: esante-kafka
+    restart: always
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+    networks:
+      - esante-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  consul:
+    image: hashicorp/consul:1.17
+    container_name: esante-consul
+    restart: always
+    environment:
+      CONSUL_BIND_INTERFACE: eth0
+    command: agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0
+    networks:
+      - esante-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== API GATEWAY ====================
+  
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: esante-api-gateway
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      consul:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  # ==================== MICROSERVICES ====================
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_auth?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=1d
+      - REFRESH_TOKEN_EXPIRES_IN=7d
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_users?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  rdv-service:
+    build:
+      context: ./services/rdv-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_rdv?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  medical-records-service:
+    build:
+      context: ./services/medical-records-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_medical?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  referral-service:
+    build:
+      context: ./services/referral-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_referral?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  messaging-service:
+    build:
+      context: ./services/messaging-service
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3006:3006"  # Expose for WebSocket
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_messaging?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_notifications?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+      replicas: 2
+
+  audit-service:
+    build:
+      context: ./services/audit-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3008
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_audit?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - esante-network
+    volumes:
+      - ./shared:/app/shared:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  esante-network:
+    driver: bridge

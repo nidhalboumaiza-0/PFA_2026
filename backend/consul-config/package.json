@@ -1,0 +1,13 @@
+{
+  "name": "consul-config",
+  "version": "1.0.0",
+  "description": "Consul configuration seeder for E-Santé microservices",
+  "type": "module",
+  "scripts": {
+    "seed": "node seed-consul-config.js",
+    "clear": "node clear-consul-config.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
