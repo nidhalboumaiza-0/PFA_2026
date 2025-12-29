@@ -22,7 +22,7 @@ const RETRY_DELAY = 2000;
  */
 async function waitForConsul() {
   console.log(`⏳ Waiting for Consul at ${CONSUL_URL}...`);
-  
+
   for (let i = 0; i < MAX_RETRIES; i++) {
     try {
       const response = await fetch(`${CONSUL_URL}/v1/status/leader`);
@@ -36,11 +36,11 @@ async function waitForConsul() {
     } catch (error) {
       // Ignore errors, keep retrying
     }
-    
+
     console.log(`   Attempt ${i + 1}/${MAX_RETRIES}...`);
     await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
   }
-  
+
   throw new Error('Consul not available after maximum retries');
 }
 
@@ -52,11 +52,11 @@ async function setKey(key, value) {
     method: 'PUT',
     body: typeof value === 'object' ? JSON.stringify(value) : String(value)
   });
-  
+
   if (!response.ok) {
     throw new Error(`Failed to set key ${key}: ${response.status}`);
   }
-  
+
   return true;
 }
 
@@ -65,7 +65,7 @@ async function setKey(key, value) {
  */
 async function seedConfiguration() {
   console.log('\n📋 Seeding configuration to Consul KV...\n');
-  
+
   // ============================================================================
   // COMMON/SHARED CONFIGURATION (esante/common/)
   // These are shared across multiple services to avoid duplication
@@ -74,55 +74,54 @@ async function seedConfiguration() {
     // === Environment ===
     'esante/common/NODE_ENV': 'development',
     'esante/common/LOG_LEVEL': 'info',
-    
+
     // === JWT Configuration (shared by all services) ===
     'esante/common/JWT_SECRET': "sfjklbslkbrnsklnfgsmnomqslnlfknmlqkfq5r4fqs54gs5q4'e_\"-ac(ee'\"aceè('e_ca\"())",
     'esante/common/JWT_EXPIRE': '1d',
     'esante/common/JWT_REFRESH_SECRET': 'your_super_secret_refresh_key_change_in_production',
     'esante/common/JWT_REFRESH_EXPIRE': '30d',
-    
+
     // === MongoDB Configuration ===
     'esante/common/MONGO_HOST': 'mongodb',
     'esante/common/MONGO_PORT': '27017',
     'esante/common/MONGO_USER': 'admin',
     'esante/common/MONGO_PASSWORD': 'password',
     'esante/common/MONGO_AUTH_SOURCE': 'admin',
-    
+
     // === Redis Configuration ===
     'esante/common/REDIS_HOST': 'redis',
     'esante/common/REDIS_PORT': '6379',
     'esante/common/REDIS_PASSWORD': '',
-    
+
     // === Kafka Configuration ===
     'esante/common/KAFKA_BROKERS': 'kafka:9092',
-    
+
     // === AWS S3 Configuration ===
-    'esante/common/AWS_REGION': 'us-east-1',
-    'esante/common/AWS_ACCESS_KEY_ID': 'AKIAVAF2YK7I2NIQVNRM',
-    'esante/common/AWS_SECRET_ACCESS_KEY': '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',
+    'esante/common/AWS_REGION': 'eu-north-1',
     'esante/common/AWS_S3_BUCKET': 'esante-medical-documents',
-    
+
     // === Email/SMTP Configuration ===
     'esante/common/SMTP_HOST': 'smtp.gmail.com',
     'esante/common/SMTP_PORT': '587',
     'esante/common/SMTP_SECURE': 'false',
-    'esante/common/SMTP_USER': 'your_email@gmail.com',
-    'esante/common/SMTP_PASS': 'your_gmail_app_password',
-    'esante/common/EMAIL_FROM': 'noreply@esante.com',
+    'esante/common/SMTP_USER': 'evatra752@gmail.com',
+    'esante/common/SMTP_PASS': 'lgwc oqaf vqfw budl',
+    'esante/common/EMAIL_FROM': 'evatra752@gmail.com',
     'esante/common/EMAIL_SERVICE': 'gmail',
-    'esante/common/EMAIL_USER': 'your-email@gmail.com',
-    'esante/common/EMAIL_PASSWORD': 'your_app_password',
-    
+    'esante/common/EMAIL_USER': 'evatra752@gmail.com',
+    'esante/common/EMAIL_PASSWORD': 'lgwc oqaf vqfw budl',
+
     // === OneSignal Push Notifications ===
     'esante/common/ONESIGNAL_APP_ID': 'c337b164-017f-48ed-9b27-a2c7d90dee46',
     'esante/common/ONESIGNAL_REST_API_KEY': 't5t6xinqeeywmjkw5fxyjhtih',
     'esante/common/ONESIGNAL_USER_AUTH_KEY': 'os_v2_app_ym33czabp5eo3gzhuld5sdpoiyt5t6xinqeeywmjkw5fxyjhtiht6a6o5lyoxeex6ub6qeyxrbhxn3kfmaa777zqf4lugfwdhou54ii',
-    
+
     // === URLs (for inter-service communication) ===
-    'esante/common/FRONTEND_URL': 'http://localhost:3000',
-    'esante/common/ADMIN_URL': 'http://localhost:3001',
+    'esante/common/FRONTEND_URL': 'http://192.168.1.20:3000',
+    'esante/common/ADMIN_URL': 'http://192.168.1.20:3001',
+    'esante/common/API_GATEWAY_URL': 'http://192.168.1.20:3000',
     'esante/common/MOBILE_APP_SCHEME': 'esante://',
-    
+
     // === Rate Limiting ===
     'esante/common/RATE_LIMIT_WINDOW_MS': '900000',
     'esante/common/RATE_LIMIT_MAX_REQUESTS': '100'
@@ -289,8 +288,8 @@ async function seedConfiguration() {
   };
 
   // Combine all configs
-  const allConfig = { 
-    ...commonConfig, 
+  const allConfig = {
+    ...commonConfig,
     ...apiGatewayConfig,
     ...authServiceConfig,
     ...userServiceConfig,
@@ -300,13 +299,13 @@ async function seedConfiguration() {
     ...messagingServiceConfig,
     ...notificationServiceConfig,
     ...auditServiceConfig,
-    ...serviceRegistry 
+    ...serviceRegistry
   };
-  
+
   // Seed each key
   let successCount = 0;
   let failCount = 0;
-  
+
   console.log('--- Common Configuration ---');
   for (const [key, value] of Object.entries(commonConfig)) {
     try {
@@ -318,7 +317,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- API Gateway ---');
   for (const [key, value] of Object.entries(apiGatewayConfig)) {
     try {
@@ -330,7 +329,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Auth Service ---');
   for (const [key, value] of Object.entries(authServiceConfig)) {
     try {
@@ -342,7 +341,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- User Service ---');
   for (const [key, value] of Object.entries(userServiceConfig)) {
     try {
@@ -354,7 +353,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- RDV Service ---');
   for (const [key, value] of Object.entries(rdvServiceConfig)) {
     try {
@@ -366,7 +365,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Medical Records Service ---');
   for (const [key, value] of Object.entries(medicalRecordsConfig)) {
     try {
@@ -378,7 +377,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Referral Service ---');
   for (const [key, value] of Object.entries(referralServiceConfig)) {
     try {
@@ -390,7 +389,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Messaging Service ---');
   for (const [key, value] of Object.entries(messagingServiceConfig)) {
     try {
@@ -402,7 +401,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Notification Service ---');
   for (const [key, value] of Object.entries(notificationServiceConfig)) {
     try {
@@ -414,7 +413,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Audit Service ---');
   for (const [key, value] of Object.entries(auditServiceConfig)) {
     try {
@@ -426,7 +425,7 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n--- Service Registry ---');
   for (const [key, value] of Object.entries(serviceRegistry)) {
     try {
@@ -438,11 +437,11 @@ async function seedConfiguration() {
       failCount++;
     }
   }
-  
+
   console.log('\n' + '='.repeat(50));
   console.log(`📊 Results: ${successCount} succeeded, ${failCount} failed`);
   console.log('='.repeat(50) + '\n');
-  
+
   return failCount === 0;
 }
 
@@ -454,14 +453,14 @@ async function main() {
   console.log('🚀 E-Santé Consul Configuration Seeder');
   console.log('   Centralizing ALL environment variables');
   console.log('='.repeat(60) + '\n');
-  
+
   try {
     // Wait for Consul to be ready
     await waitForConsul();
-    
+
     // Seed configuration
     const success = await seedConfiguration();
-    
+
     if (success) {
       console.log('✅ Configuration seeding completed successfully!');
       console.log('📍 View in Consul UI: http://localhost:8500/ui/dc1/kv/esante/');

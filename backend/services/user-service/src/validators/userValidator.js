@@ -14,7 +14,11 @@ const patientProfileSchema = Joi.object({
     city: Joi.string().allow('', null),
     state: Joi.string().allow('', null),
     zipCode: Joi.string().allow('', null),
-    country: Joi.string().allow('', null)
+    country: Joi.string().allow('', null),
+    coordinates: Joi.object({
+      type: Joi.string().valid('Point').default('Point'),
+      coordinates: Joi.array().items(Joi.number()).length(2) // [longitude, latitude]
+    })
   }),
   bloodType: Joi.string().valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', null),
   allergies: Joi.array().items(Joi.string()),
@@ -56,9 +60,9 @@ const doctorProfileSchema = Joi.object({
     zipCode: Joi.string().allow('', null),
     country: Joi.string().required(),
     coordinates: Joi.object({
-      latitude: Joi.number().min(-90).max(90).required(),
-      longitude: Joi.number().min(-180).max(180).required()
-    }).required()
+      type: Joi.string().valid('Point').default('Point'),
+      coordinates: Joi.array().items(Joi.number()).length(2) // [longitude, latitude]
+    }).allow(null)
   }),
   about: Joi.string().max(1000).allow('', null),
   consultationFee: Joi.number().min(0),

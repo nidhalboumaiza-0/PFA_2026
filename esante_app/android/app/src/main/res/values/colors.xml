@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- UCrop toolbar color - matches your app's primary color -->
+    <color name="ucrop_color_toolbar">#2196F3</color>
+    <color name="ucrop_color_statusbar">#1976D2</color>
+    <color name="ucrop_color_widget_active">#2196F3</color>
+</resources>

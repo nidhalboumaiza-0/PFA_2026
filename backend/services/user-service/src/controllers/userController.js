@@ -1,8 +1,32 @@
 import Patient from '../models/Patient.js';
 import Doctor from '../models/Doctor.js';
-import { uploadToS3, deleteFromS3 } from '../services/s3Service.js';
+import { uploadToS3, deleteFromS3, getSignedUrl } from '../services/s3Service.js';
 import { kafkaProducer, TOPICS, createEvent, cacheGet, cacheSet, cacheDelete, CACHE_KEYS, CACHE_TTL } from '../../../../shared/index.js';
 import axios from 'axios';
+
+/**
+ * Helper function to generate signed URL for profile photo
+ * @param {String} photoUrl - S3 URL or key
+ * @returns {Promise<String|null>} Signed URL or null if no photo
+ */
+const getSignedProfilePhotoUrl = async (photoUrl) => {
+  if (!photoUrl) return null;
+
+  try {
+    // Extract S3 key from full URL if needed
+    let fileKey = photoUrl;
+    if (photoUrl.includes('amazonaws.com')) {
+      const urlParts = photoUrl.split('.amazonaws.com/');
+      fileKey = urlParts[1] || photoUrl;
+    }
+
+    // Generate signed URL that expires in 1 hour
+    return await getSignedUrl(fileKey, 3600);
+  } catch (error) {
+    console.error('Error generating signed URL for profile photo:', error);
+    return null;
+  }
+};
 
 /**
  * Get current user profile
@@ -29,13 +53,19 @@ export const getCurrentUser = async (req, res, next) => {
       });
     }
 
+    // Convert profile to plain object and add signed URL for profile photo
+    const profileData = profile.toObject();
+    if (profileData.profilePhoto) {
+      profileData.profilePhoto = await getSignedProfilePhotoUrl(profileData.profilePhoto);
+    }
+
     res.status(200).json({
       user: {
         id: userId,
         email: req.user.email,
         role: req.user.role
       },
-      profile
+      profile: profileData
     });
   } catch (error) {
     next(error);
@@ -79,14 +109,14 @@ export const updatePatientProfile = async (req, res, next) => {
 
     await patient.save();
 
-    // Publish Kafka event
-    await kafkaProducer.sendEvent(
+    // Publish Kafka event (fire-and-forget - don't block the response)
+    kafkaProducer.sendEvent(
       TOPICS.USER.PROFILE_UPDATED,
       createEvent('patient.profile_updated', {
         userId: userId.toString(),
         patientId: patient._id.toString()
       })
-    );
+    ).catch(err => console.error('Kafka event failed (non-blocking):', err.message));
 
     res.status(200).json({
       message: 'Patient profile updated successfully',
@@ -132,13 +162,31 @@ export const updateDoctorProfile = async (req, res, next) => {
 
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
-        // Convert coordinates to GeoJSON format
+        // Handle clinicAddress coordinates conversion
         if (field === 'clinicAddress' && req.body.clinicAddress.coordinates) {
-          const { latitude, longitude } = req.body.clinicAddress.coordinates;
-          req.body.clinicAddress.coordinates = {
-            type: 'Point',
-            coordinates: [longitude, latitude]
-          };
+          const coords = req.body.clinicAddress.coordinates;
+          
+          // Check if it's already in GeoJSON format
+          if (coords.type === 'Point' && Array.isArray(coords.coordinates)) {
+            // Already GeoJSON - validate the coordinates
+            const [lng, lat] = coords.coordinates;
+            if (typeof lng === 'number' && typeof lat === 'number' && !isNaN(lng) && !isNaN(lat)) {
+              // Valid GeoJSON - keep as is
+              req.body.clinicAddress.coordinates = coords;
+            } else {
+              // Invalid coordinates - remove the coordinates field
+              delete req.body.clinicAddress.coordinates;
+            }
+          } else if (typeof coords.latitude === 'number' && typeof coords.longitude === 'number') {
+            // Convert from {latitude, longitude} to GeoJSON format
+            req.body.clinicAddress.coordinates = {
+              type: 'Point',
+              coordinates: [coords.longitude, coords.latitude]
+            };
+          } else {
+            // Invalid format - remove the coordinates field
+            delete req.body.clinicAddress.coordinates;
+          }
         }
 
         doctor[field] = req.body[field];
@@ -152,15 +200,15 @@ export const updateDoctorProfile = async (req, res, next) => {
     await cacheDelete(CACHE_KEYS.DOCTOR_PROFILE(doctor._id.toString()));
     console.log(`🗑️ Cache invalidated: Doctor ${doctor._id}`);
 
-    // Publish Kafka event
-    await kafkaProducer.sendEvent(
+    // Publish Kafka event (fire-and-forget - don't block the response)
+    kafkaProducer.sendEvent(
       TOPICS.USER.PROFILE_UPDATED,
       createEvent('doctor.profile_updated', {
         userId: userId.toString(),
         doctorId: doctor._id.toString(),
         changes
       })
-    );
+    ).catch(err => console.error('Kafka event failed (non-blocking):', err.message));
 
     res.status(200).json({
       message: 'Doctor profile updated successfully',
@@ -215,8 +263,8 @@ export const uploadProfilePhoto = async (req, res, next) => {
 
     // Publish Kafka event
     await kafkaProducer.sendEvent(
-      TOPICS.USER.PHOTO_UPDATED,
-      createEvent('user.photo_updated', {
+      TOPICS.USER.PHOTO_UPLOADED,
+      createEvent('user.photo_uploaded', {
         userId: userId.toString(),
         photoUrl
       })
@@ -252,7 +300,7 @@ export const searchDoctors = async (req, res, next) => {
 
     // Create cache key from search params
     const cacheKey = `doctor_search:${JSON.stringify({ name, specialty, city, latitude, longitude, radius, page, limit })}`;
-    
+
     // Try cache first
     const cachedResult = await cacheGet(cacheKey);
     if (cachedResult) {
@@ -370,6 +418,10 @@ export const getDoctorById = async (req, res, next) => {
     const cachedDoctor = await cacheGet(cacheKey);
     if (cachedDoctor) {
       console.log(`📦 Cache HIT: Doctor ${doctorId}`);
+      // Generate fresh signed URL for cached profile photo
+      if (cachedDoctor.profilePhoto) {
+        cachedDoctor.profilePhoto = await getSignedProfilePhotoUrl(cachedDoctor.profilePhoto);
+      }
       return res.status(200).json({
         doctor: cachedDoctor,
         fromCache: true
@@ -391,11 +443,20 @@ export const getDoctorById = async (req, res, next) => {
       });
     }
 
-    // Cache the doctor profile for 10 minutes
-    await cacheSet(cacheKey, doctor.toObject(), CACHE_TTL.DOCTOR_PROFILE);
+    // Convert to object and generate signed URL for profile photo
+    const doctorData = doctor.toObject();
+    const originalPhotoUrl = doctorData.profilePhoto; // Keep original for caching
+    if (doctorData.profilePhoto) {
+      doctorData.profilePhoto = await getSignedProfilePhotoUrl(doctorData.profilePhoto);
+    }
+
+    // Cache the doctor profile with ORIGINAL S3 URL (not signed URL)
+    // This way we generate fresh signed URLs on each request
+    const cacheData = { ...doctor.toObject() };
+    await cacheSet(cacheKey, cacheData, CACHE_TTL.DOCTOR_PROFILE);
 
     res.status(200).json({
-      doctor,
+      doctor: doctorData,
       fromCache: false
     });
   } catch (error) {

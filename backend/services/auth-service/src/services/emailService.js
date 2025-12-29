@@ -21,7 +21,9 @@ const createTransporter = () => {
 export const sendVerificationEmail = async (email, token) => {
   const transporter = createTransporter();
 
-  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+  // Use API gateway URL for verification (path parameter format)
+  const apiUrl = process.env.API_GATEWAY_URL || 'http://192.168.1.20:3000';
+  const verificationUrl = `${apiUrl}/api/v1/auth/verify-email/${token}`;
 
   const mailOptions = {
     from: `"E-Santé" <${process.env.EMAIL_FROM}>`,

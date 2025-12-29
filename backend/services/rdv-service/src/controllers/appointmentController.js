@@ -73,6 +73,91 @@ export const setAvailability = async (req, res, next) => {
 };
 
 /**
+ * Doctor: Bulk set availability (for templates)
+ * POST /api/v1/appointments/doctor/availability/bulk
+ */
+export const bulkSetAvailability = async (req, res, next) => {
+  try {
+    const { id: doctorId } = req.user;
+    const { availabilities, skipExisting = true } = req.body;
+
+    const results = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      errors: []
+    };
+
+    for (const availability of availabilities) {
+      try {
+        const { date, slots, isAvailable = true, specialNotes } = availability;
+        const normalizedDate = normalizeDateToStartOfDay(date);
+
+        // Check if availability already exists
+        let timeSlot = await TimeSlot.findOne({
+          doctorId,
+          date: normalizedDate
+        });
+
+        if (timeSlot) {
+          if (skipExisting) {
+            results.skipped++;
+            continue;
+          }
+          
+          // Update existing
+          timeSlot.slots = slots.map(s => ({
+            time: s.time,
+            isBooked: false,
+            appointmentId: null
+          }));
+          timeSlot.isAvailable = isAvailable;
+          timeSlot.specialNotes = specialNotes;
+          await timeSlot.save();
+          results.updated++;
+        } else {
+          // Create new
+          await TimeSlot.create({
+            doctorId,
+            date: normalizedDate,
+            slots: slots.map(s => ({
+              time: s.time,
+              isBooked: false
+            })),
+            isAvailable,
+            specialNotes
+          });
+          results.created++;
+        }
+      } catch (err) {
+        results.errors.push({
+          date: availability.date,
+          error: err.message
+        });
+      }
+    }
+
+    // Publish Kafka event
+    await kafkaProducer.sendEvent(
+      TOPICS.RDV.AVAILABILITY_SET,
+      createEvent('doctor.bulk_availability_set', {
+        doctorId: doctorId.toString(),
+        created: results.created,
+        updated: results.updated,
+        skipped: results.skipped
+      })
+    );
+
+    res.status(200).json({
+      message: 'Bulk availability set successfully',
+      results
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Doctor: Get my availability
  * GET /api/v1/appointments/doctor/availability
  */

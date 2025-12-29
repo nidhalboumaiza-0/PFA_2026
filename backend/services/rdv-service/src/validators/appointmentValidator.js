@@ -92,7 +92,29 @@ const validate = (schema) => {
   };
 };
 
+/**
+ * Bulk set availability validation (for applying templates)
+ */
+const bulkSetAvailabilitySchema = Joi.object({
+  availabilities: Joi.array().items(
+    Joi.object({
+      date: Joi.date().min('now').required(),
+      slots: Joi.array().items(
+        Joi.object({
+          time: Joi.string().pattern(/^([01]\d|2[0-3]):([0-5]\d)$/).required()
+        })
+      ).min(1).required(),
+      isAvailable: Joi.boolean().default(true),
+      specialNotes: Joi.string().allow('', null)
+    })
+  ).min(1).max(31).required().messages({
+    'array.max': 'Cannot set availability for more than 31 days at once'
+  }),
+  skipExisting: Joi.boolean().default(true)
+});
+
 export const validateSetAvailability = validate(setAvailabilitySchema);
+export const validateBulkSetAvailability = validate(bulkSetAvailabilitySchema);
 export const validateRequestAppointment = validate(requestAppointmentSchema);
 export const validateConfirmAppointment = validate(confirmAppointmentSchema);
 export const validateRejectAppointment = validate(rejectAppointmentSchema);

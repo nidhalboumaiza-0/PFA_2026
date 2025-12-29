@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Create package.json with type: module for ES modules
+RUN echo '{"type": "module", "dependencies": {"mongoose": "^8.0.0", "bcryptjs": "^2.4.3"}}' > package.json
+
+# Copy seed script
+COPY seed-data.js ./
+
+# Install dependencies
+RUN npm install
+
+# Run the seeder
+CMD ["node", "seed-data.js"]

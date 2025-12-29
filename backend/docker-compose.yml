@@ -129,6 +129,23 @@ services:
       - esante-network
     restart: "no"
 
+  # Data Seeder - Seeds mock data to MongoDB (users, doctors, patients, etc.)
+  data-seeder:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.data-seeder
+    container_name: esante-data-seeder
+    environment:
+      - MONGO_URI=mongodb://admin:password@mongodb:27017
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      config-seeder:
+        condition: service_completed_successfully
+    networks:
+      - esante-network
+    restart: "no"
+
   # ==================== API GATEWAY ====================
   
   api-gateway:

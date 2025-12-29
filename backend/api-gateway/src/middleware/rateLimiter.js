@@ -49,11 +49,12 @@ export const initializeRateLimiters = async () => {
   console.log('🔧 Initializing rate limiters with Redis...');
   redisClient = await createRedisClient();
 
-  // General rate limiter (100 requests per 15 minutes)
+  // General rate limiter (10000 requests per 15 minutes - very permissive for development)
   generalLimiter = rateLimit({
     windowMs: parseInt(getConfig('RATE_LIMIT_WINDOW_MS', '900000')),
-    max: parseInt(getConfig('RATE_LIMIT_MAX_REQUESTS', '100')),
+    max: parseInt(getConfig('RATE_LIMIT_MAX_REQUESTS', '10000')),
     message: {
+      success: false,
       message: 'Too many requests, please try again later'
     },
     standardHeaders: true,
@@ -64,11 +65,12 @@ export const initializeRateLimiters = async () => {
     })
   });
 
-  // Strict rate limiter for auth endpoints (5 requests per 15 minutes)
+  // Auth rate limiter (500 requests per 15 minutes - permissive for development)
   authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 5,
+    max: 500,
     message: {
+      success: false,
       message: 'Too many authentication attempts, please try again later'
     },
     standardHeaders: true,
@@ -79,11 +81,12 @@ export const initializeRateLimiters = async () => {
     })
   });
 
-  // File upload rate limiter (10 requests per hour)
+  // File upload rate limiter (100 requests per hour - permissive for development)
   uploadLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 10,
+    max: 100,
     message: {
+      success: false,
       message: 'Too many file uploads, please try again later'
     },
     store: new RedisStore({

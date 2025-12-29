@@ -36,7 +36,18 @@ const patientSchema = new mongoose.Schema({
     city: String,
     state: String,
     zipCode: String,
-    country: String
+    country: String,
+    coordinates: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point'
+      },
+      coordinates: {
+        type: [Number],
+        default: [0, 0]
+      }
+    }
   },
   profilePhoto: {
     type: String,
@@ -76,6 +87,9 @@ const patientSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Create 2dsphere index for geospatial queries
+patientSchema.index({ 'address.coordinates': '2dsphere' });
 
 // Virtual for full name
 patientSchema.virtual('fullName').get(function () {

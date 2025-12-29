@@ -15,9 +15,10 @@ export const initializeS3 = () => {
   s3 = new AWS.S3({
     accessKeyId: getConfig('AWS_ACCESS_KEY_ID'),
     secretAccessKey: getConfig('AWS_SECRET_ACCESS_KEY'),
-    region: getConfig('AWS_REGION', 'us-east-1')
+    region: getConfig('AWS_REGION', 'eu-north-1'),
+    signatureVersion: 'v4'  // Required for signed URLs
   });
-  console.log('✅ Medical-records S3 client initialized with config from Consul');
+  console.log('✅ Medical-records S3 client initialized with config from Consul (Signature v4)');
 };
 
 /**
@@ -39,10 +40,10 @@ export const uploadDocumentToS3 = async (fileBuffer, fileName, mimeType, patient
     const fileExtension = path.extname(fileName).toLowerCase().replace('.', '');
     const timestamp = Date.now();
     const uniqueId = uuidv4().substring(0, 8);
-    
+
     // Create S3 key with folder structure
     const s3Key = `${DOCUMENTS_FOLDER}/${documentType}/patient_${patientId}_${timestamp}_${uniqueId}.${fileExtension}`;
-    
+
     const params = {
       Bucket: getBucket(),
       Key: s3Key,
@@ -55,9 +56,9 @@ export const uploadDocumentToS3 = async (fileBuffer, fileName, mimeType, patient
         uploadTimestamp: timestamp.toString()
       }
     };
-    
+
     const result = await s3.upload(params).promise();
-    
+
     return {
       s3Key,
       s3Bucket: getBucket(),
@@ -83,7 +84,7 @@ export const getSignedUrl = async (s3Key, expiresIn = 3600) => {
       Key: s3Key,
       Expires: expiresIn
     };
-    
+
     const signedUrl = await s3.getSignedUrlPromise('getObject', params);
     return signedUrl;
   } catch (error) {
@@ -107,7 +108,7 @@ export const getDownloadUrl = async (s3Key, fileName, expiresIn = 300) => {
       Expires: expiresIn,
       ResponseContentDisposition: `attachment; filename="${fileName}"`
     };
-    
+
     const signedUrl = await s3.getSignedUrlPromise('getObject', params);
     return signedUrl;
   } catch (error) {
@@ -127,7 +128,7 @@ export const deleteDocumentFromS3 = async (s3Key) => {
       Bucket: getBucket(),
       Key: s3Key
     };
-    
+
     const result = await s3.deleteObject(params).promise();
     return result;
   } catch (error) {
@@ -147,7 +148,7 @@ export const fileExistsInS3 = async (s3Key) => {
       Bucket: getBucket(),
       Key: s3Key
     };
-    
+
     await s3.headObject(params).promise();
     return true;
   } catch (error) {
@@ -169,7 +170,7 @@ export const getFileMetadata = async (s3Key) => {
       Bucket: getBucket(),
       Key: s3Key
     };
-    
+
     const metadata = await s3.headObject(params).promise();
     return {
       contentType: metadata.ContentType,
@@ -196,7 +197,7 @@ export const copyDocument = async (sourceKey, destKey) => {
       CopySource: `${getBucket()}/${sourceKey}`,
       Key: destKey
     };
-    
+
     const result = await s3.copyObject(params).promise();
     return result;
   } catch (error) {
@@ -218,14 +219,14 @@ export const listPatientDocuments = async (patientId, maxKeys = 1000) => {
       Prefix: `${DOCUMENTS_FOLDER}/`,
       MaxKeys: maxKeys
     };
-    
+
     const result = await s3.listObjectsV2(params).promise();
-    
+
     // Filter by patient ID in key
-    const patientDocs = result.Contents.filter(obj => 
+    const patientDocs = result.Contents.filter(obj =>
       obj.Key.includes(`patient_${patientId}_`)
     );
-    
+
     return patientDocs;
   } catch (error) {
     console.error('List Documents Error:', error);

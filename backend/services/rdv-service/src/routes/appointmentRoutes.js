@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   setAvailability,
+  bulkSetAvailability,
   getDoctorAvailability,
   viewDoctorAvailability,
   requestAppointment,
@@ -23,6 +24,7 @@ import {
 import { auth, authorize } from '../../../../shared/index.js';
 import {
   validateSetAvailability,
+  validateBulkSetAvailability,
   validateRequestAppointment,
   validateConfirmAppointment,
   validateRejectAppointment,
@@ -51,6 +53,15 @@ router.post(
   authorize('doctor'),
   validateSetAvailability,
   setAvailability
+);
+
+// Doctor: Bulk set availability (for templates)
+router.post(
+  '/doctor/availability/bulk',
+  auth,
+  authorize('doctor'),
+  validateBulkSetAvailability,
+  bulkSetAvailability
 );
 
 // Doctor: Get my availability

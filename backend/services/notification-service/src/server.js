@@ -1,6 +1,5 @@
 import express from 'express';
 import { createServer } from 'http';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import notificationRoutes from './routes/notificationRoutes.js';
@@ -9,8 +8,9 @@ import { setSocketIO } from './services/notificationService.js';
 import { startNotificationConsumer, disconnectConsumer } from './kafka/notificationConsumer.js';
 import { startScheduledNotificationJob } from './jobs/scheduledNotificationJob.js';
 import morgan from 'morgan';
-import { bootstrap, getConfig, getMongoUri } from '../../../shared/index.js';
+import { bootstrap, getConfig, getMongoUri, mongoose } from '../../../shared/index.js';
 import { initializeEmailTransporter } from './services/emailService.js';
+import { initializeOneSignal } from './config/onesignal.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -34,14 +34,14 @@ app.get('/health', async (req, res) => {
   try {
     const mongoStatus = mongoose.connection.readyState;
     const isHealthy = mongoStatus === 1;
-    
+
     const statusMap = {
       0: 'disconnected',
       1: 'connected',
       2: 'connecting',
       3: 'disconnecting'
     };
-    
+
     if (isHealthy) {
       res.json({
         success: true,
@@ -105,10 +105,13 @@ const startServer = async () => {
   try {
     // Bootstrap: Load config from Consul + Register service
     await bootstrap(SERVICE_NAME);
-    
+
     // Initialize email transporter with config from Consul
     initializeEmailTransporter();
-    
+
+    // Initialize OneSignal with config from Consul
+    initializeOneSignal();
+
     // Initialize Socket.IO with config from Consul
     io = initializeSocket(httpServer);
     setSocketIO(io);

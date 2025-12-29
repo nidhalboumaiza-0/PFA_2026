@@ -1,4 +1,4 @@
-import oneSignalClient from '../config/onesignal.js';
+import { getOneSignalClient } from '../config/onesignal.js';
 import NotificationPreference from '../models/NotificationPreference.js';
 
 /**
@@ -51,6 +51,7 @@ export const sendPushNotification = async (userId, notification) => {
     }
 
     // Send notification via OneSignal
+    const oneSignalClient = getOneSignalClient();
     const response = await oneSignalClient.createNotification(oneSignalNotification);
 
     return {

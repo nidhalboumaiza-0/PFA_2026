@@ -13,10 +13,13 @@ export const initializeS3 = () => {
   AWS.config.update({
     region: getConfig('AWS_REGION'),
     accessKeyId: getConfig('AWS_ACCESS_KEY_ID'),
-    secretAccessKey: getConfig('AWS_SECRET_ACCESS_KEY')
+    secretAccessKey: getConfig('AWS_SECRET_ACCESS_KEY'),
+    signatureVersion: 'v4'  // Required for most S3 regions
   });
-  s3 = new AWS.S3();
-  console.log('✅ S3 client initialized with config from Consul');
+  s3 = new AWS.S3({
+    signatureVersion: 'v4'  // Also set on S3 client explicitly
+  });
+  console.log('✅ S3 client initialized with config from Consul (Signature v4)');
 };
 
 /**
@@ -33,7 +36,7 @@ const getBucket = () => getConfig('AWS_S3_BUCKET');
 export const uploadToS3 = async (file, folder = '') => {
   try {
     const fileContent = fs.readFileSync(file.path);
-    
+
     const params = {
       Bucket: getBucket(),
       Key: `${folder}${file.filename}`,
@@ -43,10 +46,10 @@ export const uploadToS3 = async (file, folder = '') => {
     };
 
     const result = await s3.upload(params).promise();
-    
+
     // Delete temp file
     fs.unlinkSync(file.path);
-    
+
     return result.Location;
   } catch (error) {
     // Delete temp file if upload fails
@@ -87,7 +90,7 @@ export const deleteFromS3 = async (fileUrl) => {
   try {
     // Extract key from URL if full URL is provided
     let fileKey = fileUrl;
-    
+
     if (fileUrl.includes('amazonaws.com')) {
       const urlParts = fileUrl.split('.amazonaws.com/');
       fileKey = urlParts[1] || fileUrl;

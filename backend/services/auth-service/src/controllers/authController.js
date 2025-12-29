@@ -14,6 +14,38 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
 /**
+ * Standardized error response helper
+ * @param {Response} res - Express response object
+ * @param {number} statusCode - HTTP status code
+ * @param {string} code - Error code for frontend handling
+ * @param {string} message - User-friendly message
+ * @param {object} details - Additional error details (optional)
+ */
+const sendError = (res, statusCode, code, message, details = null) => {
+  const response = {
+    success: false,
+    error: {
+      code,
+      message,
+      ...(details && { details })
+    }
+  };
+  return res.status(statusCode).json(response);
+};
+
+/**
+ * Standardized success response helper
+ */
+const sendSuccess = (res, statusCode, message, data = null) => {
+  const response = {
+    success: true,
+    message,
+    ...(data && { data })
+  };
+  return res.status(statusCode).json(response);
+};
+
+/**
  * Register new user
  * POST /api/v1/auth/register
  */
@@ -24,9 +56,8 @@ export const register = async (req, res, next) => {
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({
-        message: 'Email already registered'
-      });
+      return sendError(res, 409, 'EMAIL_EXISTS', 
+        'This email is already registered. Please use a different email or try logging in.');
     }
 
     // Create user
@@ -60,8 +91,8 @@ export const register = async (req, res, next) => {
       })
     );
 
-    res.status(201).json({
-      message: 'Registration successful. Please check your email for verification link.',
+    return sendSuccess(res, 201, 
+      'Registration successful! Please check your email to verify your account.', {
       user: {
         id: user._id,
         email: user.email,
@@ -86,31 +117,30 @@ export const login = async (req, res, next) => {
     const user = await User.findOne({ email }).select('+password');
     
     if (!user) {
-      return res.status(401).json({
-        message: 'Invalid email or password'
-      });
+      return sendError(res, 401, 'INVALID_CREDENTIALS', 
+        'The email or password you entered is incorrect. Please try again.');
     }
 
     // Check if email is verified
     if (!user.isEmailVerified) {
-      return res.status(403).json({
-        message: 'Please verify your email before logging in'
-      });
+      return sendError(res, 403, 'EMAIL_NOT_VERIFIED', 
+        'Please verify your email address before logging in. Check your inbox for the verification link.', {
+          email: user.email,
+          canResend: true
+        });
     }
 
     // Check if account is active
     if (!user.isActive) {
-      return res.status(403).json({
-        message: 'Your account has been deactivated. Please contact support.'
-      });
+      return sendError(res, 403, 'ACCOUNT_DEACTIVATED', 
+        'Your account has been deactivated. Please contact support for assistance.');
     }
 
     // Compare password
     const isPasswordMatch = await user.comparePassword(password);
     if (!isPasswordMatch) {
-      return res.status(401).json({
-        message: 'Invalid email or password'
-      });
+      return sendError(res, 401, 'INVALID_CREDENTIALS', 
+        'The email or password you entered is incorrect. Please try again.');
     }
 
     // Update last login
@@ -122,7 +152,6 @@ export const login = async (req, res, next) => {
     const refreshToken = user.generateRefreshToken();
 
     // Create Redis session for tracking logged-in users
-    // This allows us to invalidate sessions on logout and track all active sessions
     const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
     const sessionId = await createSession(user._id.toString(), {
       email: user.email,
@@ -143,8 +172,7 @@ export const login = async (req, res, next) => {
       })
     );
 
-    res.status(200).json({
-      message: 'Login successful',
+    return sendSuccess(res, 200, 'Login successful! Welcome back.', {
       user: {
         id: user._id,
         email: user.email,
@@ -155,7 +183,7 @@ export const login = async (req, res, next) => {
       },
       accessToken,
       refreshToken,
-      sessionId  // Client should store this for logout
+      sessionId
     });
   } catch (error) {
     next(error);
@@ -175,17 +203,20 @@ export const refreshToken = async (req, res, next) => {
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
     if (decoded.type !== 'refresh') {
-      return res.status(401).json({
-        message: 'Invalid token type'
-      });
+      return sendError(res, 401, 'INVALID_TOKEN_TYPE', 
+        'Invalid token type. Please log in again.');
     }
 
     // Find user
     const user = await User.findById(decoded.id);
-    if (!user || !user.isActive) {
-      return res.status(401).json({
-        message: 'User not found or inactive'
-      });
+    if (!user) {
+      return sendError(res, 401, 'USER_NOT_FOUND', 
+        'User account not found. Please log in again.');
+    }
+    
+    if (!user.isActive) {
+      return sendError(res, 401, 'ACCOUNT_DEACTIVATED', 
+        'Your account has been deactivated. Please contact support.');
     }
 
     // Generate new access token
@@ -199,15 +230,17 @@ export const refreshToken = async (req, res, next) => {
       })
     );
 
-    res.status(200).json({
-      message: 'Token refreshed successfully',
+    return sendSuccess(res, 200, 'Token refreshed successfully.', {
       accessToken: newAccessToken
     });
   } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        message: 'Invalid or expired refresh token'
-      });
+    if (error.name === 'JsonWebTokenError') {
+      return sendError(res, 401, 'INVALID_TOKEN', 
+        'Your session is invalid. Please log in again.');
+    }
+    if (error.name === 'TokenExpiredError') {
+      return sendError(res, 401, 'TOKEN_EXPIRED', 
+        'Your session has expired. Please log in again.');
     }
     next(error);
   }
@@ -223,14 +256,11 @@ export const getCurrentUser = async (req, res, next) => {
     const user = await User.findById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({
-        message: 'User not found'
-      });
+      return sendError(res, 404, 'USER_NOT_FOUND', 
+        'User account not found.');
     }
 
-    res.status(200).json({
-      user
-    });
+    return sendSuccess(res, 200, 'User retrieved successfully.', { user });
   } catch (error) {
     next(error);
   }
@@ -258,9 +288,7 @@ export const logout = async (req, res, next) => {
       })
     );
 
-    res.status(200).json({
-      message: 'Logout successful'
-    });
+    return sendSuccess(res, 200, 'You have been logged out successfully.');
   } catch (error) {
     next(error);
   }
@@ -278,31 +306,27 @@ export const verifyEmail = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     if (decoded.purpose !== 'email-verification') {
-      return res.status(400).json({
-        message: 'Invalid verification token'
-      });
+      return sendError(res, 400, 'INVALID_TOKEN', 
+        'This verification link is invalid. Please request a new one.');
     }
 
     // Find user
     const user = await User.findById(decoded.id);
 
     if (!user) {
-      return res.status(404).json({
-        message: 'User not found'
-      });
+      return sendError(res, 404, 'USER_NOT_FOUND', 
+        'User account not found. The account may have been deleted.');
     }
 
     if (user.isEmailVerified) {
-      return res.status(400).json({
-        message: 'Email already verified'
-      });
+      return sendError(res, 400, 'ALREADY_VERIFIED', 
+        'Your email is already verified. You can log in now.');
     }
 
     // Check if token has expired
     if (user.emailVerificationExpires < new Date()) {
-      return res.status(400).json({
-        message: 'Verification token has expired. Please request a new one.'
-      });
+      return sendError(res, 400, 'TOKEN_EXPIRED', 
+        'This verification link has expired. Please request a new one.');
     }
 
     // Verify email
@@ -320,14 +344,15 @@ export const verifyEmail = async (req, res, next) => {
       })
     );
 
-    res.status(200).json({
-      message: 'Email verified successfully. You can now log in.'
-    });
+    return sendSuccess(res, 200, 'Email verified successfully! You can now log in to your account.');
   } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(400).json({
-        message: 'Invalid or expired verification token'
-      });
+    if (error.name === 'JsonWebTokenError') {
+      return sendError(res, 400, 'INVALID_TOKEN', 
+        'This verification link is invalid. Please request a new one.');
+    }
+    if (error.name === 'TokenExpiredError') {
+      return sendError(res, 400, 'TOKEN_EXPIRED', 
+        'This verification link has expired. Please request a new one.');
     }
     next(error);
   }
@@ -344,15 +369,13 @@ export const resendVerification = async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({
-        message: 'User not found'
-      });
+      return sendError(res, 404, 'USER_NOT_FOUND', 
+        'No account found with this email address.');
     }
 
     if (user.isEmailVerified) {
-      return res.status(400).json({
-        message: 'Email already verified'
-      });
+      return sendError(res, 400, 'ALREADY_VERIFIED', 
+        'Your email is already verified. You can log in now.');
     }
 
     // Generate new token
@@ -362,9 +385,8 @@ export const resendVerification = async (req, res, next) => {
     // Send email
     await emailService.sendVerificationEmail(email, verificationToken);
 
-    res.status(200).json({
-      message: 'Verification email sent successfully'
-    });
+    return sendSuccess(res, 200, 
+      'Verification email sent! Please check your inbox and spam folder.');
   } catch (error) {
     next(error);
   }
@@ -382,9 +404,8 @@ export const forgotPassword = async (req, res, next) => {
 
     // Don't reveal if user exists or not (security)
     if (!user) {
-      return res.status(200).json({
-        message: 'If that email exists, a password reset link has been sent.'
-      });
+      return sendSuccess(res, 200, 
+        'If an account exists with this email, you will receive a password reset link shortly.');
     }
 
     // Generate reset token
@@ -399,14 +420,12 @@ export const forgotPassword = async (req, res, next) => {
       user.passwordResetExpires = undefined;
       await user.save();
 
-      return res.status(500).json({
-        message: 'Error sending password reset email. Please try again.'
-      });
+      return sendError(res, 500, 'EMAIL_FAILED', 
+        'Unable to send password reset email. Please try again later.');
     }
 
-    res.status(200).json({
-      message: 'If that email exists, a password reset link has been sent.'
-    });
+    return sendSuccess(res, 200, 
+      'If an account exists with this email, you will receive a password reset link shortly.');
   } catch (error) {
     next(error);
   }
@@ -434,9 +453,8 @@ export const resetPassword = async (req, res, next) => {
     });
 
     if (!user) {
-      return res.status(400).json({
-        message: 'Invalid or expired password reset token'
-      });
+      return sendError(res, 400, 'INVALID_TOKEN', 
+        'This password reset link is invalid or has expired. Please request a new one.');
     }
 
     // Set new password
@@ -457,9 +475,8 @@ export const resetPassword = async (req, res, next) => {
       })
     );
 
-    res.status(200).json({
-      message: 'Password reset successful. You can now log in with your new password.'
-    });
+    return sendSuccess(res, 200, 
+      'Password reset successful! You can now log in with your new password.');
   } catch (error) {
     next(error);
   }
@@ -477,17 +494,15 @@ export const changePassword = async (req, res, next) => {
     const user = await User.findById(req.user.id).select('+password');
 
     if (!user) {
-      return res.status(404).json({
-        message: 'User not found'
-      });
+      return sendError(res, 404, 'USER_NOT_FOUND', 
+        'User account not found.');
     }
 
     // Verify current password
     const isPasswordMatch = await user.comparePassword(currentPassword);
     if (!isPasswordMatch) {
-      return res.status(401).json({
-        message: 'Current password is incorrect'
-      });
+      return sendError(res, 401, 'WRONG_PASSWORD', 
+        'The current password you entered is incorrect.');
     }
 
     // Set new password
@@ -497,9 +512,7 @@ export const changePassword = async (req, res, next) => {
     // Send confirmation email
     await emailService.sendPasswordChangedEmail(user.email);
 
-    res.status(200).json({
-      message: 'Password changed successfully'
-    });
+    return sendSuccess(res, 200, 'Password changed successfully!');
   } catch (error) {
     next(error);
   }
@@ -513,7 +526,7 @@ export const getActiveSessions = async (req, res, next) => {
   try {
     const sessions = await getUserSessions(req.user.id);
     
-    res.status(200).json({
+    return sendSuccess(res, 200, 'Active sessions retrieved.', {
       sessions: sessions.map(s => ({
         sessionId: s.sessionId,
         device: s.device,
@@ -546,9 +559,7 @@ export const logoutAllDevices = async (req, res, next) => {
       })
     );
 
-    res.status(200).json({
-      message: `Logged out from all ${count} devices`
-    });
+    return sendSuccess(res, 200, `Successfully logged out from all ${count} device(s).`);
   } catch (error) {
     next(error);
   }

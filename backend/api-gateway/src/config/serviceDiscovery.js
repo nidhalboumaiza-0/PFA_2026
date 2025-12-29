@@ -93,6 +93,12 @@ export const serviceConfig = {
     public: false,
     fallbackUrl: 'http://127.0.0.1:3007'
   },
+  socketio: {
+    serviceName: 'notification-service',
+    path: '/socket.io',
+    public: true,
+    fallbackUrl: 'http://127.0.0.1:3007'
+  },
   audit: {
     serviceName: 'audit-service',
     path: '/api/v1/audit',
@@ -108,13 +114,13 @@ export const serviceConfig = {
 const discoverFromConsul = async (serviceName) => {
   try {
     const response = await consulFetch(`/v1/health/service/${serviceName}?passing=true`);
-    
+
     if (!response.ok) {
       throw new Error(`Consul discovery failed: ${response.status}`);
     }
-    
+
     const services = await response.json();
-    
+
     return services.map(entry => ({
       id: entry.Service.ID,
       address: entry.Service.Address,
@@ -132,20 +138,20 @@ const discoverFromConsul = async (serviceName) => {
  */
 const getCachedInstances = async (serviceName) => {
   const cached = serviceCache.get(serviceName);
-  
+
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.instances;
   }
-  
+
   const instances = await discoverFromConsul(serviceName);
-  
+
   if (instances.length > 0) {
     serviceCache.set(serviceName, {
       instances,
       timestamp: Date.now()
     });
   }
-  
+
   return instances;
 };
 
@@ -155,23 +161,23 @@ const getCachedInstances = async (serviceName) => {
  */
 export const getServiceUrl = async (serviceKey) => {
   const config = serviceConfig[serviceKey];
-  
+
   if (!config) {
     throw new Error(`Unknown service: ${serviceKey}`);
   }
-  
+
   const instances = await getCachedInstances(config.serviceName);
-  
+
   if (instances.length === 0) {
     console.log(`⚠️ No Consul instances for ${config.serviceName}, using fallback`);
     return config.fallbackUrl;
   }
-  
+
   // Round-robin selection
   const currentIndex = rrIndexes.get(config.serviceName) || 0;
   const instance = instances[currentIndex % instances.length];
   rrIndexes.set(config.serviceName, currentIndex + 1);
-  
+
   return instance.url;
 };
 
@@ -180,7 +186,7 @@ export const getServiceUrl = async (serviceKey) => {
  */
 export const getAllServiceUrls = async () => {
   const result = {};
-  
+
   for (const [key, config] of Object.entries(serviceConfig)) {
     const url = await getServiceUrl(key);
     result[key] = {
@@ -188,7 +194,7 @@ export const getAllServiceUrls = async () => {
       currentUrl: url
     };
   }
-  
+
   return result;
 };
 
@@ -209,7 +215,7 @@ export const isConsulAvailable = async () => {
  */
 export const registerGateway = async (port) => {
   const os = await import('os');
-  
+
   const getLocalIP = () => {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -221,11 +227,11 @@ export const registerGateway = async (port) => {
     }
     return '127.0.0.1';
   };
-  
+
   // In Docker, use the service name; locally use the IP
   const address = process.env.SERVICE_HOST || getLocalIP();
   const serviceId = `api-gateway-${address}-${port}`;
-  
+
   const registration = {
     ID: serviceId,
     Name: 'api-gateway',
@@ -238,16 +244,16 @@ export const registerGateway = async (port) => {
       Timeout: '5s'
     }
   };
-  
+
   try {
     const response = await consulFetch('/v1/agent/service/register', {
       method: 'PUT',
       body: JSON.stringify(registration)
     });
-    
+
     if (response.ok) {
       console.log(`✅ API Gateway registered with Consul: ${serviceId}`);
-      
+
       // Deregister on shutdown
       const deregister = async () => {
         try {
@@ -260,10 +266,10 @@ export const registerGateway = async (port) => {
         }
         process.exit(0);
       };
-      
+
       process.on('SIGTERM', deregister);
       process.on('SIGINT', deregister);
-      
+
       return serviceId;
     } else {
       throw new Error(`Registration failed: ${response.status}`);
