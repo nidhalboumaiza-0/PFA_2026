@@ -1,5 +1,5 @@
 import Consultation from '../models/Consultation.js';
-import { kafkaProducer, TOPICS, createEvent } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess } from '../../../../shared/index.js';
 import {
   fetchAppointmentDetails,
   fetchPatientProfile,
@@ -40,24 +40,21 @@ export const createConsultation = async (req, res, next) => {
     const appointment = await fetchAppointmentDetails(appointmentId, authToken);
 
     if (appointment.status !== 'completed') {
-      return res.status(400).json({
-        message: 'Consultation can only be created for completed appointments'
-      });
+      return sendError(res, 400, 'INVALID_APPOINTMENT_STATUS',
+        'Consultation can only be created for completed appointments.');
     }
 
     // Verify doctor owns this appointment
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only create consultations for your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only create consultations for your own appointments.');
     }
 
     // Check if consultation already exists for this appointment
     const existingConsultation = await Consultation.findOne({ appointmentId });
     if (existingConsultation) {
-      return res.status(409).json({
-        message: 'Consultation already exists for this appointment'
-      });
+      return sendError(res, 409, 'CONSULTATION_EXISTS',
+        'Consultation already exists for this appointment.');
     }
 
     // Create consultation
@@ -113,24 +110,21 @@ export const getConsultationById = async (req, res, next) => {
     const consultation = await Consultation.findById(consultationId);
 
     if (!consultation) {
-      return res.status(404).json({
-        message: 'Consultation not found'
-      });
+      return sendError(res, 404, 'CONSULTATION_NOT_FOUND',
+        'The consultation you are looking for does not exist.');
     }
 
     // Verify access
     if (role === 'patient') {
       if (consultation.patientId.toString() !== userId.toString()) {
-        return res.status(403).json({
-          message: 'You can only view your own consultations'
-        });
+        return sendError(res, 403, 'FORBIDDEN',
+          'You can only view your own consultations.');
       }
     } else if (role === 'doctor') {
       const hasAccess = await consultation.canDoctorAccess(userId);
       if (!hasAccess) {
-        return res.status(403).json({
-          message: 'You can only view consultations for patients you have treated'
-        });
+        return sendError(res, 403, 'FORBIDDEN',
+          'You can only view consultations for patients you have treated.');
       }
     }
 
@@ -165,23 +159,20 @@ export const updateConsultation = async (req, res, next) => {
     const consultation = await Consultation.findById(consultationId);
 
     if (!consultation) {
-      return res.status(404).json({
-        message: 'Consultation not found'
-      });
+      return sendError(res, 404, 'CONSULTATION_NOT_FOUND',
+        'The consultation you are looking for does not exist.');
     }
 
     // Verify doctor owns this consultation
     if (consultation.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only update your own consultations'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only update your own consultations.');
     }
 
     // Check if consultation can be modified (24-hour rule)
     if (!consultation.canBeModified()) {
-      return res.status(400).json({
-        message: 'Consultation cannot be modified after 24 hours or if archived'
-      });
+      return sendError(res, 400, 'CONSULTATION_LOCKED',
+        'Consultation cannot be modified after 24 hours or if archived.');
     }
 
     // Track changed fields
@@ -245,17 +236,15 @@ export const getConsultationFullDetails = async (req, res, next) => {
     const consultation = await Consultation.findById(consultationId);
 
     if (!consultation) {
-      return res.status(404).json({
-        message: 'Consultation not found'
-      });
+      return sendError(res, 404, 'CONSULTATION_NOT_FOUND',
+        'The consultation you are looking for does not exist.');
     }
 
     // Verify doctor has access
     const hasAccess = await consultation.canDoctorAccess(doctorId);
     if (!hasAccess) {
-      return res.status(403).json({
-        message: 'You can only view consultations for patients you have treated'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only view consultations for patients you have treated.');
     }
 
     // Fetch patient full profile

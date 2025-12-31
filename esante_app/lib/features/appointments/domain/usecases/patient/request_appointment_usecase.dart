@@ -28,14 +28,14 @@ class RequestAppointmentParams extends Equatable {
   final String doctorId;
   final DateTime appointmentDate;
   final String appointmentTime;
-  final String? reason;
+  final String reason;
   final String? notes;
 
   const RequestAppointmentParams({
     required this.doctorId,
     required this.appointmentDate,
     required this.appointmentTime,
-    this.reason,
+    required this.reason,
     this.notes,
   });
 

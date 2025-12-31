@@ -87,9 +87,8 @@ const handleAppointmentRejected = async (event) => {
       userId: patientId,
       userType: 'patient',
       title: 'Rendez-vous refusé',
-      body: `Votre demande de rendez-vous avec ${doctorName} a été refusée. ${
-        reason ? `Raison: ${reason}` : ''
-      }`,
+      body: `Votre demande de rendez-vous avec ${doctorName} a été refusée. ${reason ? `Raison: ${reason}` : ''
+        }`,
       type: 'appointment_rejected',
       relatedResource: {
         resourceType: 'appointment',
@@ -413,6 +412,43 @@ const handlePrescriptionCreated = async (event) => {
 };
 
 /**
+ * Handle prescription updated event
+ */
+const handlePrescriptionUpdated = async (event) => {
+  try {
+    const { prescriptionId, patientId, doctorId, modificationType } = event;
+
+    const doctor = await getDoctorById(doctorId);
+    const doctorName = doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : 'votre médecin';
+
+    // Notify patient
+    await createNotification({
+      userId: patientId,
+      userType: 'patient',
+      title: 'Ordonnance modifiée',
+      body: `${doctorName} a modifié votre ordonnance. Veuillez consulter les changements.`,
+      type: 'prescription_updated',
+      relatedResource: {
+        resourceType: 'prescription',
+        resourceId: prescriptionId,
+      },
+      priority: 'high',
+      actionUrl: `/prescriptions/${prescriptionId}`,
+      actionData: {
+        prescriptionId,
+        doctorId,
+        modificationType,
+        doctorName,
+      },
+    });
+
+    console.log(`✅ Prescription updated notification sent to patient ${patientId}`);
+  } catch (error) {
+    console.error('Error handling prescription updated:', error);
+  }
+};
+
+/**
  * Handle document uploaded event
  */
 const handleDocumentUploaded = async (event) => {
@@ -420,7 +456,7 @@ const handleDocumentUploaded = async (event) => {
     const { documentId, patientId, uploadedBy, uploaderType, documentTitle, documentType } = event;
 
     let uploaderName = 'Un professionnel de santé';
-    
+
     if (uploaderType === 'doctor') {
       const doctor = await getDoctorById(uploadedBy);
       uploaderName = doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : 'Votre médecin';
@@ -504,7 +540,7 @@ const handleAppointmentRescheduled = async (event) => {
       });
 
       console.log(`✅ Appointment rescheduled notification sent to patient ${patientId}`);
-    } 
+    }
     // If reschedule was approved (patient requested), notify patient of approval
     else if (rescheduledBy === 'patient') {
       const doctor = await getDoctorById(doctorId);
@@ -644,6 +680,7 @@ const handleEvent = async (topic, event) => {
     'referral.referral.scheduled': handleReferralScheduled,
     'medical-records.consultation.created': handleConsultationCreated,
     'medical-records.prescription.created': handlePrescriptionCreated,
+    'medical-records.prescription.updated': handlePrescriptionUpdated,
     'medical-records.document.uploaded': handleDocumentUploaded,
   };
 
@@ -663,7 +700,7 @@ export const startNotificationConsumer = async () => {
   try {
     // Initialize Kafka client (now that config is loaded from Consul)
     initializeKafkaClient();
-    
+
     await consumer.connect();
     console.log('✅ Kafka consumer connected');
 
@@ -682,6 +719,7 @@ export const startNotificationConsumer = async () => {
         'referral.referral.scheduled',
         'medical-records.consultation.created',
         'medical-records.prescription.created',
+        'medical-records.prescription.updated',
         'medical-records.document.uploaded',
       ],
       fromBeginning: false,

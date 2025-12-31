@@ -22,7 +22,7 @@ export const sendVerificationEmail = async (email, token) => {
   const transporter = createTransporter();
 
   // Use API gateway URL for verification (path parameter format)
-  const apiUrl = process.env.API_GATEWAY_URL || 'http://192.168.1.20:3000';
+  const apiUrl = process.env.API_GATEWAY_URL || 'http://192.168.1.85:3000';
   const verificationUrl = `${apiUrl}/api/v1/auth/verify-email/${token}`;
 
   const mailOptions = {

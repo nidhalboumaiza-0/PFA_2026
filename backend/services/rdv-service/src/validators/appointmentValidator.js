@@ -33,7 +33,8 @@ const requestAppointmentSchema = Joi.object({
   }),
   reason: Joi.string().max(500).required().messages({
     'any.required': 'Reason for appointment is required'
-  })
+  }),
+  notes: Joi.string().max(1000).allow('', null)
 });
 
 /**

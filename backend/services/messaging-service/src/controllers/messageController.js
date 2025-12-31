@@ -2,6 +2,7 @@ import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import { publishToKafka } from '../../../../shared/kafka/producer.js';
 import { KAFKA_TOPICS } from '../../../../shared/kafka/topics.js';
+import { sendError, sendSuccess } from '../../../../shared/index.js';
 import {
   getUserInfo,
   formatConversationForResponse,
@@ -28,18 +29,21 @@ export const createOrGetConversation = async (req, res) => {
 
     // Validate recipient ID
     if (currentUserId === recipientId) {
-      return res.status(400).json({ message: 'Cannot create conversation with yourself' });
+      return sendError(res, 400, 'INVALID_RECIPIENT',
+        'Cannot create conversation with yourself.');
     }
 
     // Get recipient info from User Service
     const recipientInfo = await getUserInfo(recipientId, req.headers.authorization.split(' ')[1]);
     if (!recipientInfo) {
-      return res.status(404).json({ message: 'Recipient not found' });
+      return sendError(res, 404, 'RECIPIENT_NOT_FOUND',
+        'Recipient not found.');
     }
 
     // Verify recipient type matches
     if (recipientInfo.role !== recipientType) {
-      return res.status(400).json({ message: 'Recipient type mismatch' });
+      return sendError(res, 400, 'RECIPIENT_TYPE_MISMATCH',
+        'Recipient type mismatch.');
     }
 
     // Check if user can message recipient
@@ -51,7 +55,8 @@ export const createOrGetConversation = async (req, res) => {
     );
 
     if (!canMessage) {
-      return res.status(403).json({ message: 'You cannot message this user' });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You cannot message this user.');
     }
 
     // Sort participants to ensure consistent ordering
@@ -177,11 +182,13 @@ export const getConversationMessages = async (req, res) => {
     // Find conversation and verify user is participant
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: 'Conversation not found' });
+      return sendError(res, 404, 'CONVERSATION_NOT_FOUND',
+        'Conversation not found.');
     }
 
     if (!conversation.isParticipant(currentUserId)) {
-      return res.status(403).json({ message: 'You are not part of this conversation' });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You are not part of this conversation.');
     }
 
     // Build query for messages
@@ -285,11 +292,13 @@ export const markMessagesAsRead = async (req, res) => {
     // Find conversation and verify user is participant
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: 'Conversation not found' });
+      return sendError(res, 404, 'CONVERSATION_NOT_FOUND',
+        'Conversation not found.');
     }
 
     if (!conversation.isParticipant(currentUserId)) {
-      return res.status(403).json({ message: 'You are not part of this conversation' });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You are not part of this conversation.');
     }
 
     // Mark messages as read
@@ -349,23 +358,27 @@ export const sendFileMessage = async (req, res) => {
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({ message: 'No file provided' });
+      return sendError(res, 400, 'NO_FILE',
+        'No file provided.');
     }
 
     // Find conversation and verify user is participant
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: 'Conversation not found' });
+      return sendError(res, 404, 'CONVERSATION_NOT_FOUND',
+        'Conversation not found.');
     }
 
     if (!conversation.isParticipant(currentUserId)) {
-      return res.status(403).json({ message: 'You are not part of this conversation' });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You are not part of this conversation.');
     }
 
     // Validate receiver is the other participant
     const otherParticipant = conversation.getOtherParticipant(currentUserId);
     if (otherParticipant.toString() !== receiverId) {
-      return res.status(400).json({ message: 'Invalid receiver ID' });
+      return sendError(res, 400, 'INVALID_RECEIVER',
+        'Invalid receiver ID.');
     }
 
     // Validate file
@@ -449,12 +462,14 @@ export const deleteMessage = async (req, res) => {
     // Find message
     const message = await Message.findById(messageId);
     if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
+      return sendError(res, 404, 'MESSAGE_NOT_FOUND',
+        'Message not found.');
     }
 
     // Verify user can delete (only sender can delete)
     if (!message.canUserDelete(currentUserId)) {
-      return res.status(403).json({ message: 'You can only delete your own messages' });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only delete your own messages.');
     }
 
     // Check if message is recent (optional: within 24 hours)

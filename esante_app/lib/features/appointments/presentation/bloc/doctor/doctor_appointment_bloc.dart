@@ -62,6 +62,7 @@ class DoctorAppointmentBloc
     on<RejectAppointmentRequest>(_onRejectAppointment);
     on<CompleteAppointmentAction>(_onCompleteAppointment);
     on<RescheduleByDoctor>(_onRescheduleByDoctor);
+    on<CancelByDoctor>(_onCancelByDoctor);
     on<ApprovePatientReschedule>(_onApproveReschedule);
     on<RejectPatientReschedule>(_onRejectReschedule);
     on<LoadAppointmentStatistics>(_onLoadStatistics);
@@ -367,6 +368,24 @@ class DoctorAppointmentBloc
       (failure) => emit(DoctorAppointmentError(message: failure.message)),
       (appointment) =>
           emit(AppointmentRescheduled(appointment: appointment)),
+    );
+  }
+
+  Future<void> _onCancelByDoctor(
+    CancelByDoctor event,
+    Emitter<DoctorAppointmentState> emit,
+  ) async {
+    emit(AppointmentActionLoading());
+
+    // Using repository directly - same cancel endpoint works for both roles
+    final result = await repository.cancelAppointment(
+      appointmentId: event.appointmentId,
+      reason: event.reason,
+    );
+
+    result.fold(
+      (failure) => emit(DoctorAppointmentError(message: failure.message)),
+      (appointment) => emit(AppointmentCancelledByDoctor(appointment: appointment)),
     );
   }
 

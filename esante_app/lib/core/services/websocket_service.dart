@@ -79,8 +79,9 @@ class WebSocketService {
     _isConnecting = true;
     _currentToken = token;
 
-    // Connect via API Gateway on port 3000 (proxies to notification-service)
-    final socketUrl = baseUrl ?? 'http://10.0.2.2:3000';
+    // Connect directly to notification-service on port 3007
+    // The API Gateway WebSocket proxy has stability issues
+    final socketUrl = baseUrl ?? 'http://10.0.2.2:3007';
     _log('init', 'Connecting to WebSocket at $socketUrl');
 
     try {

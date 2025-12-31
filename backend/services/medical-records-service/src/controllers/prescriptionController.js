@@ -1,8 +1,9 @@
 import Prescription from '../models/Prescription.js';
-import { kafkaProducer, TOPICS, createEvent } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess } from '../../../../shared/index.js';
 import {
   fetchConsultationDetails,
   verifyConsultationOwnership,
+  validatePrescriptionTiming,
   formatRemainingTime,
   buildPrescriptionDateQuery,
   formatPrescriptionForList,
@@ -37,12 +38,19 @@ export const createPrescription = async (req, res, next) => {
     // Verify doctor owns the consultation
     verifyConsultationOwnership(consultation, doctorId);
 
+    // Validate 10-minute timing rule
+    const timingValidation = validatePrescriptionTiming(consultation);
+    if (!timingValidation.allowed) {
+      return sendError(res, 400, 'PRESCRIPTION_TOO_EARLY',
+        timingValidation.message,
+        { remainingMinutes: timingValidation.remainingMinutes });
+    }
+
     // Check if prescription already exists for this consultation
     const existingPrescription = await Prescription.findOne({ consultationId });
     if (existingPrescription) {
-      return res.status(409).json({
-        message: 'Prescription already exists for this consultation'
-      });
+      return sendError(res, 409, 'PRESCRIPTION_EXISTS',
+        'Prescription already exists for this consultation.');
     }
 
     // Create prescription
@@ -106,12 +114,15 @@ export const getPrescriptionById = async (req, res, next) => {
     const { id: userId, role } = req.user;
     const { prescriptionId } = req.params;
 
-    const prescription = await Prescription.findById(prescriptionId);
+    const prescription = await Prescription.findById(prescriptionId)
+      .populate({
+        path: 'consultationId',
+        select: 'appointmentId consultationDate chiefComplaint medicalNote.diagnosis consultationType'
+      });
 
     if (!prescription) {
-      return res.status(404).json({
-        message: 'Prescription not found'
-      });
+      return sendError(res, 404, 'PRESCRIPTION_NOT_FOUND',
+        'The prescription you are looking for does not exist.');
     }
 
     // Auto-lock if time expired
@@ -120,9 +131,8 @@ export const getPrescriptionById = async (req, res, next) => {
     // Verify access
     if (role === 'patient') {
       if (prescription.patientId.toString() !== userId.toString()) {
-        return res.status(403).json({
-          message: 'You can only view your own prescriptions'
-        });
+        return sendError(res, 403, 'FORBIDDEN',
+          'You can only view your own prescriptions.');
       }
     } else if (role === 'doctor') {
       // Doctor must have treated this patient
@@ -131,17 +141,28 @@ export const getPrescriptionById = async (req, res, next) => {
         patientId: prescription.patientId,
         doctorId: userId
       });
-      
+
       if (!hasAccess) {
-        return res.status(403).json({
-          message: 'You can only view prescriptions for patients you have treated'
-        });
+        return sendError(res, 403, 'FORBIDDEN',
+          'You can only view prescriptions for patients you have treated.');
       }
     }
 
     // Get doctor and patient info
     const doctor = await getDoctorBasicInfo(prescription.doctorId);
     const patient = await getPatientBasicInfo(prescription.patientId);
+
+    // Get consultation info
+    const consultation = prescription.consultationId;
+    let appointmentInfo = null;
+    if (consultation) {
+      appointmentInfo = {
+        consultationDate: consultation.consultationDate,
+        consultationType: consultation.consultationType,
+        chiefComplaint: consultation.chiefComplaint,
+        diagnosis: consultation.medicalNote?.diagnosis || 'Not specified'
+      };
+    }
 
     // Publish audit event
     await kafkaProducer.sendEvent(
@@ -160,7 +181,10 @@ export const getPrescriptionById = async (req, res, next) => {
         prescriptionDate: prescription.prescriptionDate,
         doctor,
         patient,
+        // Appointment/Consultation context
+        appointment: appointmentInfo,
         medications: prescription.medications,
+        medicationCount: prescription.medications.length,
         generalInstructions: prescription.generalInstructions,
         specialWarnings: prescription.specialWarnings,
         pharmacyName: prescription.pharmacyName,
@@ -192,16 +216,14 @@ export const updatePrescription = async (req, res, next) => {
     const prescription = await Prescription.findById(prescriptionId);
 
     if (!prescription) {
-      return res.status(404).json({
-        message: 'Prescription not found'
-      });
+      return sendError(res, 404, 'PRESCRIPTION_NOT_FOUND',
+        'The prescription you are looking for does not exist.');
     }
 
     // Verify doctor owns this prescription
     if (prescription.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only update your own prescriptions'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only update your own prescriptions.');
     }
 
     // Auto-lock if time expired
@@ -209,10 +231,9 @@ export const updatePrescription = async (req, res, next) => {
 
     // Check if editable
     if (!prescription.isEditable()) {
-      return res.status(400).json({
-        message: 'Prescription is locked and can no longer be edited. The 1-hour editing window has expired.',
-        lockedAt: prescription.lockedAt
-      });
+      return sendError(res, 400, 'PRESCRIPTION_LOCKED',
+        'Prescription is locked and can no longer be edited. The 1-hour editing window has expired.',
+        { lockedAt: prescription.lockedAt });
     }
 
     // Create snapshot of current data
@@ -263,6 +284,8 @@ export const updatePrescription = async (req, res, next) => {
       TOPICS.MEDICAL.PRESCRIPTION_UPDATED,
       createEvent('prescription.updated', {
         prescriptionId: prescription._id.toString(),
+        patientId: prescription.patientId.toString(),
+        doctorId: doctorId.toString(),
         updatedBy: doctorId.toString(),
         modificationType: Object.keys(changes).join(', ')
       })
@@ -300,22 +323,19 @@ export const lockPrescription = async (req, res, next) => {
     const prescription = await Prescription.findById(prescriptionId);
 
     if (!prescription) {
-      return res.status(404).json({
-        message: 'Prescription not found'
-      });
+      return sendError(res, 404, 'PRESCRIPTION_NOT_FOUND',
+        'The prescription you are looking for does not exist.');
     }
 
     // Verify doctor owns this prescription
     if (prescription.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only lock your own prescriptions'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only lock your own prescriptions.');
     }
 
     if (prescription.isLocked) {
-      return res.status(400).json({
-        message: 'Prescription is already locked'
-      });
+      return sendError(res, 400, 'ALREADY_LOCKED',
+        'Prescription is already locked.');
     }
 
     // Manually lock
@@ -356,9 +376,8 @@ export const getPrescriptionHistory = async (req, res, next) => {
     const prescription = await Prescription.findById(prescriptionId);
 
     if (!prescription) {
-      return res.status(404).json({
-        message: 'Prescription not found'
-      });
+      return sendError(res, 404, 'PRESCRIPTION_NOT_FOUND',
+        'The prescription you are looking for does not exist.');
     }
 
     // Verify doctor has access (treated this patient)
@@ -369,9 +388,8 @@ export const getPrescriptionHistory = async (req, res, next) => {
     });
 
     if (!hasAccess) {
-      return res.status(403).json({
-        message: 'You can only view history for patients you have treated'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only view history for patients you have treated.');
     }
 
     // Format modification history
@@ -502,16 +520,36 @@ export const getMyPrescriptions = async (req, res, next) => {
       totalPrescriptions
     );
 
-    // Get prescriptions
+    // Get prescriptions with consultation data
     const prescriptions = await Prescription.find(query)
       .sort({ prescriptionDate: -1 })
       .skip(skip)
-      .limit(limit || 20);
+      .limit(limit || 20)
+      .populate({
+        path: 'consultationId',
+        select: 'appointmentId consultationDate chiefComplaint medicalNote.diagnosis consultationType'
+      });
 
-    // Format for patient view
+    // Format for patient view with consultation and appointment info
     const formattedPrescriptions = await Promise.all(
       prescriptions.map(async (p) => {
         const doctor = await getDoctorBasicInfo(p.doctorId);
+
+        // Get consultation info
+        const consultation = p.consultationId;
+        let appointmentInfo = null;
+
+        // If we have consultation with appointmentId, we could fetch appointment
+        // For now, use consultationDate as the appointment reference
+        if (consultation) {
+          appointmentInfo = {
+            consultationDate: consultation.consultationDate,
+            consultationType: consultation.consultationType,
+            chiefComplaint: consultation.chiefComplaint,
+            diagnosis: consultation.medicalNote?.diagnosis || 'Not specified'
+          };
+        }
+
         return {
           id: p._id,
           date: p.prescriptionDate,
@@ -519,11 +557,23 @@ export const getMyPrescriptions = async (req, res, next) => {
             name: doctor.name,
             specialty: doctor.specialty
           },
-          medications: p.medications,
+          // Appointment/Consultation context
+          appointment: appointmentInfo,
+          // Medications
+          medications: p.medications.map(m => ({
+            name: m.medicationName,
+            dosage: m.dosage,
+            form: m.form,
+            frequency: m.frequency,
+            duration: m.duration,
+            instructions: m.instructions
+          })),
+          medicationCount: p.medications.length,
           generalInstructions: p.generalInstructions,
           specialWarnings: p.specialWarnings,
           pharmacyName: p.pharmacyName,
-          status: p.status
+          status: p.status,
+          createdAt: p.createdAt
         };
       })
     );

@@ -1,6 +1,6 @@
 import Appointment from '../models/Appointment.js';
 import TimeSlot from '../models/TimeSlot.js';
-import { kafkaProducer, TOPICS, createEvent, cacheGet, cacheSet, cacheDelete } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, cacheGet, cacheSet, cacheDelete, sendError, sendSuccess, mongoose } from '../../../../shared/index.js';
 import {
   fetchDoctorProfile,
   checkSlotAvailability,
@@ -17,7 +17,7 @@ import {
  */
 export const setAvailability = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { date, slots, isAvailable, specialNotes } = req.body;
 
     const normalizedDate = normalizeDateToStartOfDay(date);
@@ -78,7 +78,7 @@ export const setAvailability = async (req, res, next) => {
  */
 export const bulkSetAvailability = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { availabilities, skipExisting = true } = req.body;
 
     const results = {
@@ -104,7 +104,7 @@ export const bulkSetAvailability = async (req, res, next) => {
             results.skipped++;
             continue;
           }
-          
+
           // Update existing
           timeSlot.slots = slots.map(s => ({
             time: s.time,
@@ -163,7 +163,7 @@ export const bulkSetAvailability = async (req, res, next) => {
  */
 export const getDoctorAvailability = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { startDate, endDate } = req.query;
 
     const query = { doctorId };
@@ -196,9 +196,11 @@ export const viewDoctorAvailability = async (req, res, next) => {
     const { doctorId } = req.params;
     const { date, startDate, endDate } = req.query;
 
+    console.log(`🔍 viewDoctorAvailability - doctorId: ${doctorId}, startDate: ${startDate}, endDate: ${endDate}`);
+
     // Create cache key
     const cacheKey = `availability:${doctorId}:${date || ''}:${startDate || ''}:${endDate || ''}`;
-    
+
     // Try cache first
     const cached = await cacheGet(cacheKey);
     if (cached) {
@@ -206,7 +208,8 @@ export const viewDoctorAvailability = async (req, res, next) => {
       return res.status(200).json({ data: cached, fromCache: true });
     }
 
-    const query = { doctorId, isAvailable: true };
+    // Query with ObjectId (TimeSlot model stores doctorId as ObjectId)
+    const query = { doctorId: new mongoose.Types.ObjectId(doctorId), isAvailable: true };
 
     if (date) {
       query.date = {
@@ -220,15 +223,27 @@ export const viewDoctorAvailability = async (req, res, next) => {
       };
     }
 
-    const timeSlots = await TimeSlot.find(query).sort({ date: 1 });
+    console.log(`🔍 Query:`, JSON.stringify(query));
 
-    // Filter out booked slots
-    const availableSlots = timeSlots.map(ts => ({
-      date: ts.date,
-      availableSlots: ts.slots.filter(slot => !slot.isBooked).map(slot => ({
-        time: slot.time
+    // First check if ANY timeslots exist for this doctor (without date filter)
+    const allSlotsCount = await TimeSlot.countDocuments({ doctorId: new mongoose.Types.ObjectId(doctorId) });
+    console.log(`📊 Total TimeSlots for doctor ${doctorId}: ${allSlotsCount}`);
+
+    const timeSlots = await TimeSlot.find(query).sort({ date: 1 });
+    console.log(`📊 TimeSlots matching query: ${timeSlots.length}`);
+
+    // Filter out booked slots - include _id and doctorId for Flutter app
+    const availableSlots = timeSlots
+      .map(ts => ({
+        _id: ts._id,
+        doctorId: ts.doctorId,
+        date: ts.date,
+        isAvailable: ts.isAvailable,
+        availableSlots: ts.slots.filter(slot => !slot.isBooked).map(slot => ({
+          time: slot.time
+        }))
       }))
-    }));
+      .filter(ts => ts.availableSlots.length > 0); // Only include days with available slots
 
     // Cache for 1 minute (availability changes often)
     await cacheSet(cacheKey, availableSlots, 60);
@@ -263,18 +278,16 @@ export const requestAppointment = async (req, res, next) => {
     );
 
     if (hasConflict) {
-      return res.status(409).json({
-        message: 'You already have an appointment with this doctor at this time'
-      });
+      return sendError(res, 409, 'APPOINTMENT_CONFLICT',
+        'You already have an appointment with this doctor at this time.');
     }
 
     // Check if slot is available
     const isAvailable = await checkSlotAvailability(doctorId, appointmentDate, appointmentTime);
 
     if (!isAvailable) {
-      return res.status(400).json({
-        message: 'This time slot is not available'
-      });
+      return sendError(res, 400, 'SLOT_NOT_AVAILABLE',
+        'This time slot is no longer available. Please choose another time.');
     }
 
     // Create appointment
@@ -323,7 +336,7 @@ export const requestAppointment = async (req, res, next) => {
  */
 export const getAppointmentRequests = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { status = 'pending', page = 1, limit = 20 } = req.query;
 
     const query = { doctorId };
@@ -360,28 +373,25 @@ export const getAppointmentRequests = async (req, res, next) => {
  */
 export const confirmAppointment = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { appointmentId } = req.params;
     const { notes } = req.body;
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only confirm your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only confirm your own appointments.');
     }
 
     if (appointment.status !== 'pending') {
-      return res.status(400).json({
-        message: 'Only pending appointments can be confirmed'
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Only pending appointments can be confirmed.');
     }
 
     appointment.status = 'confirmed';
@@ -415,28 +425,25 @@ export const confirmAppointment = async (req, res, next) => {
  */
 export const rejectAppointment = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { appointmentId } = req.params;
     const { rejectionReason } = req.body;
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only reject your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only reject your own appointments.');
     }
 
     if (appointment.status !== 'pending') {
-      return res.status(400).json({
-        message: 'Only pending appointments can be rejected'
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Only pending appointments can be rejected.');
     }
 
     appointment.status = 'rejected';
@@ -476,42 +483,37 @@ export const rejectAppointment = async (req, res, next) => {
  */
 export const rescheduleAppointment = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { appointmentId } = req.params;
     const { newDate, newTime, reason } = req.body;
 
     if (!newDate || !newTime) {
-      return res.status(400).json({
-        message: 'New date and time are required'
-      });
+      return sendError(res, 400, 'VALIDATION_ERROR',
+        'New date and time are required.');
     }
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only reschedule your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only reschedule your own appointments.');
     }
 
     if (!['pending', 'confirmed'].includes(appointment.status)) {
-      return res.status(400).json({
-        message: 'Only pending or confirmed appointments can be rescheduled'
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Only pending or confirmed appointments can be rescheduled.');
     }
 
     // Check if new slot is available
     const isSlotAvailable = await checkSlotAvailability(doctorId, newDate, newTime);
     if (!isSlotAvailable) {
-      return res.status(400).json({
-        message: 'The selected time slot is not available'
-      });
+      return sendError(res, 400, 'SLOT_NOT_AVAILABLE',
+        'The selected time slot is not available.');
     }
 
     // Free the old time slot
@@ -538,7 +540,7 @@ export const rescheduleAppointment = async (req, res, next) => {
     appointment.rescheduledAt = new Date();
     appointment.rescheduleReason = reason;
     appointment.rescheduleCount = (appointment.rescheduleCount || 0) + 1;
-    
+
     // Clear any pending reschedule request
     appointment.rescheduleRequest = null;
 
@@ -591,47 +593,41 @@ export const requestReschedule = async (req, res, next) => {
     const { newDate, newTime, reason } = req.body;
 
     if (!newDate || !newTime) {
-      return res.status(400).json({
-        message: 'Requested date and time are required'
-      });
+      return sendError(res, 400, 'VALIDATION_ERROR',
+        'Requested date and time are required.');
     }
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.patientId.toString() !== patientId.toString()) {
-      return res.status(403).json({
-        message: 'You can only request reschedule for your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only request reschedule for your own appointments.');
     }
 
     if (!['pending', 'confirmed'].includes(appointment.status)) {
-      return res.status(400).json({
-        message: 'Only pending or confirmed appointments can be rescheduled'
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Only pending or confirmed appointments can be rescheduled.');
     }
 
     if (appointment.rescheduleRequest?.status === 'pending') {
-      return res.status(400).json({
-        message: 'A reschedule request is already pending for this appointment'
-      });
+      return sendError(res, 400, 'RESCHEDULE_PENDING',
+        'A reschedule request is already pending for this appointment.');
     }
 
     // Check if new slot is available
     const isSlotAvailable = await checkSlotAvailability(
-      appointment.doctorId, 
-      newDate, 
+      appointment.doctorId,
+      newDate,
       newTime
     );
     if (!isSlotAvailable) {
-      return res.status(400).json({
-        message: 'The selected time slot is not available'
-      });
+      return sendError(res, 400, 'SLOT_NOT_AVAILABLE',
+        'The selected time slot is not available.');
     }
 
     // Store reschedule request
@@ -675,27 +671,24 @@ export const requestReschedule = async (req, res, next) => {
  */
 export const approveReschedule = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { appointmentId } = req.params;
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only approve reschedule for your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only approve reschedule for your own appointments.');
     }
 
     if (!appointment.rescheduleRequest || appointment.rescheduleRequest.status !== 'pending') {
-      return res.status(400).json({
-        message: 'No pending reschedule request for this appointment'
-      });
+      return sendError(res, 400, 'NO_PENDING_RESCHEDULE',
+        'No pending reschedule request for this appointment.');
     }
 
     const { requestedDate, requestedTime, reason } = appointment.rescheduleRequest;
@@ -770,28 +763,25 @@ export const approveReschedule = async (req, res, next) => {
  */
 export const rejectReschedule = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { appointmentId } = req.params;
     const { rejectionReason } = req.body;
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only reject reschedule for your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only reject reschedule for your own appointments.');
     }
 
     if (!appointment.rescheduleRequest || appointment.rescheduleRequest.status !== 'pending') {
-      return res.status(400).json({
-        message: 'No pending reschedule request for this appointment'
-      });
+      return sendError(res, 400, 'NO_PENDING_RESCHEDULE',
+        'No pending reschedule request for this appointment.');
     }
 
     appointment.rescheduleRequest.status = 'rejected';
@@ -836,21 +826,18 @@ export const cancelAppointment = async (req, res, next) => {
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.patientId.toString() !== patientId.toString()) {
-      return res.status(403).json({
-        message: 'You can only cancel your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only cancel your own appointments.');
     }
 
     if (!['pending', 'confirmed'].includes(appointment.status)) {
-      return res.status(400).json({
-        message: 'Only pending or confirmed appointments can be cancelled'
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Only pending or confirmed appointments can be cancelled.');
     }
 
     appointment.status = 'cancelled';
@@ -896,9 +883,8 @@ export const getAppointmentDetails = async (req, res, next) => {
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     // Verify user is patient or doctor of this appointment
@@ -906,9 +892,8 @@ export const getAppointmentDetails = async (req, res, next) => {
     const isDoctor = appointment.doctorId.toString() === userId.toString();
 
     if (!isPatient && !isDoctor) {
-      return res.status(403).json({
-        message: 'You do not have access to this appointment'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You do not have access to this appointment.');
     }
 
     res.status(200).json({
@@ -958,11 +943,33 @@ export const getPatientAppointments = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Populate doctor info for each appointment
+    const appointmentsWithDoctorInfo = await Promise.all(
+      appointments.map(async (apt) => {
+        const aptObj = apt.toObject();
+        try {
+          const doctor = await fetchDoctorProfile(apt.doctorId.toString());
+          aptObj.doctorInfo = {
+            _id: doctor._id,
+            firstName: doctor.firstName,
+            lastName: doctor.lastName,
+            specialty: doctor.specialty,
+            profilePhoto: doctor.profilePhoto,
+            clinicName: doctor.clinicName
+          };
+        } catch (err) {
+          console.warn(`Could not fetch doctor ${apt.doctorId}:`, err.message);
+          aptObj.doctorInfo = null;
+        }
+        return aptObj;
+      })
+    );
+
     const totalAppointments = await Appointment.countDocuments(query);
     const totalPages = Math.ceil(totalAppointments / parseInt(limit));
 
     res.status(200).json({
-      appointments,
+      appointments: appointmentsWithDoctorInfo,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -980,7 +987,7 @@ export const getPatientAppointments = async (req, res, next) => {
  */
 export const getDoctorAppointments = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { date, status = 'all', page = 1, limit = 20 } = req.query;
 
     const query = { doctorId };
@@ -1027,27 +1034,24 @@ export const getDoctorAppointments = async (req, res, next) => {
  */
 export const completeAppointment = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { appointmentId } = req.params;
 
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: 'Appointment not found'
-      });
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'The appointment you are looking for does not exist.');
     }
 
     if (appointment.doctorId.toString() !== doctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only complete your own appointments'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only complete your own appointments.');
     }
 
     if (appointment.status !== 'confirmed') {
-      return res.status(400).json({
-        message: 'Only confirmed appointments can be marked as completed'
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Only confirmed appointments can be marked as completed.');
     }
 
     appointment.status = 'completed';
@@ -1101,9 +1105,8 @@ export const referralBooking = async (req, res, next) => {
     );
 
     if (!isAvailable) {
-      return res.status(400).json({
-        message: 'This time slot is not available'
-      });
+      return sendError(res, 400, 'SLOT_NOT_AVAILABLE',
+        'This time slot is no longer available. Please choose another time.');
     }
 
     // Create appointment (auto-confirmed for referrals)
@@ -1150,7 +1153,7 @@ export const referralBooking = async (req, res, next) => {
  */
 export const getAppointmentStatistics = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
 
     // Try cache first
     const cacheKey = `doctor_stats:${doctorId}`;
@@ -1211,9 +1214,8 @@ export const checkAppointmentRelationship = async (req, res, next) => {
     const { patientId, doctorId } = req.query;
 
     if (!patientId || !doctorId) {
-      return res.status(400).json({
-        message: 'patientId and doctorId are required'
-      });
+      return sendError(res, 400, 'VALIDATION_ERROR',
+        'patientId and doctorId are required.');
     }
 
     // Check if there's any appointment (completed, confirmed, or pending) between patient and doctor

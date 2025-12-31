@@ -176,6 +176,19 @@ class LoadAppointmentStatistics extends DoctorAppointmentEvent {
   const LoadAppointmentStatistics();
 }
 
+class CancelByDoctor extends DoctorAppointmentEvent {
+  final String appointmentId;
+  final String reason;
+
+  const CancelByDoctor({
+    required this.appointmentId,
+    required this.reason,
+  });
+
+  @override
+  List<Object?> get props => [appointmentId, reason];
+}
+
 class SelectScheduleDate extends DoctorAppointmentEvent {
   final DateTime date;
   final List<String>? slots;

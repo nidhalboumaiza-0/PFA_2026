@@ -279,14 +279,17 @@ class _WeeklyTemplateScreenState extends State<WeeklyTemplateScreen> {
           SizedBox(height: 16.h),
           
           // Quick actions
-          Row(
-            children: [
-              _buildQuickAction('Morning', ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30']),
-              SizedBox(width: 8.w),
-              _buildQuickAction('Afternoon', ['14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30']),
-              SizedBox(width: 8.w),
-              _buildQuickAction('All Day', _allTimeSlots),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildQuickAction('Morning', ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30']),
+                SizedBox(width: 8.w),
+                _buildQuickAction('Afternoon', ['14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30']),
+                SizedBox(width: 8.w),
+                _buildQuickAction('All Day', _allTimeSlots),
+              ],
+            ),
           ),
           SizedBox(height: 24.h),
           

@@ -3,6 +3,8 @@ import '../error/exceptions.dart';
 
 class ApiClient {
   final Dio _dio;
+  static const int _maxRetries = 2;
+  static const Duration _retryDelay = Duration(milliseconds: 500);
 
   ApiClient({required Dio dio}) : _dio = dio;
 
@@ -10,40 +12,67 @@ class ApiClient {
     print('[ApiClient.$method] $message');
   }
 
-  /// GET request
+  /// Check if error is retryable (connection issues)
+  bool _isRetryableError(DioException e) {
+    return e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.unknown ||
+        (e.error?.toString().contains('Connection closed') ?? false);
+  }
+
+  /// GET request with automatic retry for connection errors
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
   }) async {
     _log('get', 'GET $path');
-    try {
-      final response = await _dio.get(path, queryParameters: queryParameters);
-      _log('get', 'Response status: ${response.statusCode}');
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      _log('get', 'DioException: ${e.type} - ${e.message}');
-      throw _handleDioError(e);
+    
+    int attempts = 0;
+    while (true) {
+      try {
+        final response = await _dio.get(path, queryParameters: queryParameters);
+        _log('get', 'Response status: ${response.statusCode}');
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        attempts++;
+        if (_isRetryableError(e) && attempts <= _maxRetries) {
+          _log('get', 'Retryable error, attempt $attempts/$_maxRetries. Retrying in ${_retryDelay.inMilliseconds}ms...');
+          await Future.delayed(_retryDelay);
+          continue;
+        }
+        _log('get', 'DioException: ${e.type} - ${e.message}');
+        throw _handleDioError(e);
+      }
     }
   }
 
-  /// POST request
+  /// POST request with automatic retry for connection errors
   Future<Map<String, dynamic>> post(
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
   }) async {
     _log('post', 'POST $path');
-    try {
-      final response = await _dio.post(
-        path,
-        data: data,
-        queryParameters: queryParameters,
-      );
-      _log('post', 'Response status: ${response.statusCode}');
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      _log('post', 'DioException: ${e.type} - ${e.message}');
-      throw _handleDioError(e);
+    
+    int attempts = 0;
+    while (true) {
+      try {
+        final response = await _dio.post(
+          path,
+          data: data,
+          queryParameters: queryParameters,
+        );
+        _log('post', 'Response status: ${response.statusCode}');
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        attempts++;
+        if (_isRetryableError(e) && attempts <= _maxRetries) {
+          _log('post', 'Retryable error, attempt $attempts/$_maxRetries. Retrying...');
+          await Future.delayed(_retryDelay);
+          continue;
+        }
+        _log('post', 'DioException: ${e.type} - ${e.message}');
+        throw _handleDioError(e);
+      }
     }
   }
 
@@ -53,15 +82,23 @@ class ApiClient {
     dynamic data,
     Map<String, dynamic>? queryParameters,
   }) async {
-    try {
-      final response = await _dio.put(
-        path,
-        data: data,
-        queryParameters: queryParameters,
-      );
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      throw _handleDioError(e);
+    int attempts = 0;
+    while (true) {
+      try {
+        final response = await _dio.put(
+          path,
+          data: data,
+          queryParameters: queryParameters,
+        );
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        attempts++;
+        if (_isRetryableError(e) && attempts <= _maxRetries) {
+          await Future.delayed(_retryDelay);
+          continue;
+        }
+        throw _handleDioError(e);
+      }
     }
   }
 
@@ -70,11 +107,19 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? queryParameters,
   }) async {
-    try {
-      final response = await _dio.delete(path, queryParameters: queryParameters);
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      throw _handleDioError(e);
+    int attempts = 0;
+    while (true) {
+      try {
+        final response = await _dio.delete(path, queryParameters: queryParameters);
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        attempts++;
+        if (_isRetryableError(e) && attempts <= _maxRetries) {
+          await Future.delayed(_retryDelay);
+          continue;
+        }
+        throw _handleDioError(e);
+      }
     }
   }
 
@@ -103,8 +148,16 @@ class ApiClient {
       // Try to get error from nested 'error' object first
       final errorData = data['error'] as Map<String, dynamic>?;
       
-      // Get message from either error.message, data.message, or default
-      final message = errorData?['message'] ?? 
+      // Handle validation errors array from backend
+      final errors = data['errors'] as List<dynamic>?;
+      String? validationMessage;
+      if (errors != null && errors.isNotEmpty) {
+        validationMessage = errors.join(', ');
+      }
+      
+      // Get message from either errors array, error.message, data.message, or default
+      final message = validationMessage ??
+                      errorData?['message'] ?? 
                       data['message'] ?? 
                       'Something went wrong';
       
@@ -116,7 +169,7 @@ class ApiClient {
         code: code,
         message: message,
         statusCode: response.statusCode ?? 500,
-        details: errorData?['details'],
+        details: errorData?['details'] ?? errors,
       );
     }
 

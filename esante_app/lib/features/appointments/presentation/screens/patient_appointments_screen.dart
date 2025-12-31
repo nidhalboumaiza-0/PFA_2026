@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:lottie/lottie.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
 import '../../domain/entities/appointment_entity.dart';
 import '../bloc/patient/patient_appointment_bloc.dart';
 import '../widgets/appointment_card.dart';
+import '../widgets/reschedule_dialog.dart';
 
 class PatientAppointmentsScreen extends StatelessWidget {
   final bool showBackButton;
@@ -104,6 +107,11 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
                   context.read<PatientAppointmentBloc>().add(
                         const LoadPatientAppointments(),
                       );
+                } else if (state is RescheduleRequestSent) {
+                  AppSnackBar.success(context, 'Reschedule request sent');
+                  context.read<PatientAppointmentBloc>().add(
+                        const LoadPatientAppointments(),
+                      );
                 } else if (state is PatientAppointmentError) {
                   AppSnackBar.error(context, state.message);
                 }
@@ -165,28 +173,34 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
   }) {
     if (appointments.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isUpcoming ? Icons.calendar_today : Icons.history,
-              size: 64.sp,
-              color: AppColors.grey300,
-            ),
-            SizedBox(height: 16.h),
-            AppTitle(
-              text: isUpcoming ? 'No upcoming appointments' : 'No past appointments',
-              fontSize: 18.sp,
-            ),
-            SizedBox(height: 8.h),
-            AppSubtitle(
-              text: isUpcoming
-                  ? 'Book an appointment with a doctor'
-                  : 'Your appointment history will appear here',
-              fontSize: 14.sp,
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Padding(
+          padding: EdgeInsets.all(24.r),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Lottie.asset(
+                isUpcoming
+                    ? AppAssets.waitingAppointmentLottie
+                    : AppAssets.prescriptionLottie,
+                width: 200.w,
+                height: 200.h,
+                fit: BoxFit.contain,
+              ),
+              SizedBox(height: 24.h),
+              AppTitle(
+                text: isUpcoming ? 'No upcoming appointments' : 'No past appointments',
+                fontSize: 18.sp,
+              ),
+              SizedBox(height: 8.h),
+              AppSubtitle(
+                text: isUpcoming
+                    ? 'Book an appointment with a doctor'
+                    : 'Your appointment history will appear here',
+                fontSize: 14.sp,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -270,7 +284,6 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
   }
 
   void _showRescheduleDialog(BuildContext context, AppointmentEntity appointment) {
-    // TODO: Implement reschedule dialog with date/time picker
-    AppSnackBar.info(context, 'Reschedule feature coming soon');
+    RescheduleDialog.show(context, appointment: appointment);
   }
 }

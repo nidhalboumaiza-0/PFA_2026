@@ -20,7 +20,7 @@ abstract class AppointmentRepository {
     required String doctorId,
     required DateTime appointmentDate,
     required String appointmentTime,
-    String? reason,
+    required String reason,
     String? notes,
   });
 

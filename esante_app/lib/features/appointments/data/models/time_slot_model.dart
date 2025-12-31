@@ -12,14 +12,26 @@ class TimeSlotModel extends TimeSlotEntity {
   });
 
   factory TimeSlotModel.fromJson(Map<String, dynamic> json) {
+    // Handle 'slots' for full format or 'availableSlots' for patient view format
+    List<SlotInfo> slotsList = [];
+    
+    if (json['slots'] != null) {
+      // Full format from doctor's own availability
+      slotsList = (json['slots'] as List<dynamic>)
+          .map((s) => SlotInfoModel.fromJson(s as Map<String, dynamic>))
+          .toList();
+    } else if (json['availableSlots'] != null) {
+      // Simplified format from patient view (viewDoctorAvailability)
+      slotsList = (json['availableSlots'] as List<dynamic>)
+          .map((s) => SlotInfoModel.fromJson(s as Map<String, dynamic>))
+          .toList();
+    }
+    
     return TimeSlotModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       doctorId: json['doctorId']?.toString() ?? '',
       date: DateTime.parse(json['date']),
-      slots: (json['slots'] as List<dynamic>?)
-              ?.map((s) => SlotInfoModel.fromJson(s as Map<String, dynamic>))
-              .toList() ??
-          [],
+      slots: slotsList,
       isAvailable: json['isAvailable'] ?? true,
       specialNotes: json['specialNotes'],
     );

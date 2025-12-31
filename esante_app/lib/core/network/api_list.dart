@@ -84,4 +84,18 @@ class ApiList {
   // Shared
   static String appointmentDetails(String appointmentId) => 
       '$_appointmentsBase/$appointmentId';
+
+  // ============== Medical Records Endpoints ==============
+  static const String _medicalBase = '/api/v1/medical';
+
+  // Patient prescription endpoints
+  static const String patientMyPrescriptions = '$_medicalBase/patients/my-prescriptions';
+  static String prescriptionById(String prescriptionId) =>
+      '$_medicalBase/prescriptions/$prescriptionId';
+
+  // Patient medical history
+  static const String patientMyMedicalHistory = '$_medicalBase/patients/my-history';
+
+  // Doctor prescription operations
+  static const String doctorCreatePrescription = '$_medicalBase/prescriptions';
 }

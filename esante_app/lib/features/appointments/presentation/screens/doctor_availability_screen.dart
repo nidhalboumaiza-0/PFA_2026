@@ -55,6 +55,9 @@ class _DoctorAvailabilityViewState extends State<_DoctorAvailabilityView>
   Map<String, List<String>> _weeklyTemplate = {};
   bool _isApplyingTemplate = false;
   late TabController _tabController;
+  
+  // Cache the last loaded schedule to survive state changes from other screens
+  DoctorScheduleLoaded? _cachedScheduleState;
 
   static const List<String> _allTimeSlots = [
     '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
@@ -210,62 +213,94 @@ class _DoctorAvailabilityViewState extends State<_DoctorAvailabilityView>
           ),
         ],
       ),
-      body: _isApplyingTemplate
-          ? _buildApplyingOverlay()
-          : BlocConsumer<DoctorAppointmentBloc, DoctorAppointmentState>(
-              listener: (context, state) {
-                if (state is AvailabilitySetSuccess) {
-                  AppSnackBar.success(context, 'Availability saved!');
-                  _selectedSlots.clear();
-                  _notesController.clear();
-                  context.read<DoctorAppointmentBloc>().add(
-                    LoadDoctorSchedule(
-                      startDate: DateTime.now(),
-                      endDate: DateTime.now().add(const Duration(days: 90)),
-                    ),
-                  );
-                } else if (state is BulkAvailabilitySetSuccess) {
-                  setState(() => _isApplyingTemplate = false);
-                  AppSnackBar.success(
-                    context,
-                    'Template applied! ${state.created} created, ${state.updated} updated${state.skipped > 0 ? ', ${state.skipped} skipped' : ''}',
-                  );
-                  context.read<DoctorAppointmentBloc>().add(
-                    LoadDoctorSchedule(
-                      startDate: DateTime.now(),
-                      endDate: DateTime.now().add(const Duration(days: 90)),
-                    ),
-                  );
-                } else if (state is DoctorAppointmentError) {
-                  setState(() => _isApplyingTemplate = false);
-                  AppSnackBar.error(context, state.message);
-                }
-              },
-              builder: (context, state) {
-                if (state is DoctorScheduleLoading) {
+      // Wrap body in BlocListener that's ALWAYS active (not conditional)
+      // This ensures template application success/error states are caught
+      body: BlocListener<DoctorAppointmentBloc, DoctorAppointmentState>(
+        listener: (context, state) {
+          if (state is AvailabilitySetSuccess) {
+            AppSnackBar.success(context, 'Availability saved!');
+            _selectedSlots.clear();
+            _notesController.clear();
+            context.read<DoctorAppointmentBloc>().add(
+              LoadDoctorSchedule(
+                startDate: DateTime.now(),
+                endDate: DateTime.now().add(const Duration(days: 90)),
+              ),
+            );
+          } else if (state is BulkAvailabilitySetSuccess) {
+            setState(() => _isApplyingTemplate = false);
+            AppSnackBar.success(
+              context,
+              'Template applied! ${state.created} created, ${state.updated} updated${state.skipped > 0 ? ', ${state.skipped} skipped' : ''}',
+            );
+            context.read<DoctorAppointmentBloc>().add(
+              LoadDoctorSchedule(
+                startDate: DateTime.now(),
+                endDate: DateTime.now().add(const Duration(days: 90)),
+              ),
+            );
+          } else if (state is DoctorAppointmentError) {
+            setState(() => _isApplyingTemplate = false);
+            AppSnackBar.error(context, state.message);
+          }
+        },
+        child: _isApplyingTemplate
+            ? _buildApplyingOverlay()
+            : BlocBuilder<DoctorAppointmentBloc, DoctorAppointmentState>(
+                // Only rebuild on states relevant to this screen
+                buildWhen: (previous, current) {
+                  return current is DoctorAppointmentInitial ||
+                      current is DoctorScheduleLoading ||
+                      current is DoctorScheduleLoaded ||
+                      current is AvailabilityActionLoading ||
+                      current is AvailabilitySetSuccess ||
+                      current is BulkAvailabilitySetSuccess ||
+                      current is DoctorAppointmentError;
+                },
+                builder: (context, state) {
+                  // Cache schedule state when loaded
+                  if (state is DoctorScheduleLoaded) {
+                    _cachedScheduleState = state;
+                  }
+                  
+                  // Show loading for initial state or schedule loading
+                  if (state is DoctorAppointmentInitial || state is DoctorScheduleLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (state is AvailabilityActionLoading) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Saving...'),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (state is DoctorScheduleLoaded) {
+                    return _buildContent(context, state);
+                  }
+                  
+                  // If we have a cached schedule, show that (handles case where 
+                  // another screen emits a different state)
+                  if (_cachedScheduleState != null) {
+                    return _buildContent(context, _cachedScheduleState!);
+                  }
+
+                  // Only show error for actual error state
+                  if (state is DoctorAppointmentError) {
+                    return _buildErrorState(context);
+                  }
+
+                  // Default: show loading (in case of other transient states)
                   return const Center(child: CircularProgressIndicator());
-                }
-
-                if (state is AvailabilityActionLoading) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Saving...'),
-                      ],
-                    ),
-                  );
-                }
-
-                if (state is DoctorScheduleLoaded) {
-                  return _buildContent(context, state);
-                }
-
-                return _buildErrorState(context);
-              },
-            ),
+                },
+              ),
+      ),
     );
   }
 

@@ -160,6 +160,15 @@ class AppointmentRescheduled extends DoctorAppointmentState {
   List<Object?> get props => [appointment];
 }
 
+class AppointmentCancelledByDoctor extends DoctorAppointmentState {
+  final AppointmentEntity appointment;
+
+  const AppointmentCancelledByDoctor({required this.appointment});
+
+  @override
+  List<Object?> get props => [appointment];
+}
+
 class RescheduleApproved extends DoctorAppointmentState {
   final AppointmentEntity appointment;
 

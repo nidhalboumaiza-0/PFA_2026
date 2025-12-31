@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../../../../../core/constants/app_assets.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/widgets/widgets.dart';
 import '../signup_controller.dart';
@@ -29,25 +30,11 @@ class RoleSelectionStep extends StatelessWidget {
           SizedBox(height: 20.h),
           // Illustration
           Center(
-            child: Container(
-              height: 160.h,
-              width: 160.w,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.primary.withValues(alpha: 0.05),
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.person_add_rounded,
-                size: 70.sp,
-                color: AppColors.primary,
-              ),
+            child: Image.asset(
+              AppAssets.doctorsPanaImage,
+              height: 180.h,
+              width: 200.w,
+              fit: BoxFit.contain,
             ),
           ),
           SizedBox(height: 32.h),

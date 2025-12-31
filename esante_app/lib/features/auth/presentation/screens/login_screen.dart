@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:lottie/lottie.dart';
 import 'location_permission_screen.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
@@ -186,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen>
                         // Lottie Animation
                         Center(
                           child: Lottie.asset(
-                            'assets/lottie/login.json',
+                            AppAssets.consultationLottie,
                             width: 280.w,
                             height: 220.h,
                             fit: BoxFit.contain,

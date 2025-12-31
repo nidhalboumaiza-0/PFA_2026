@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:lottie/lottie.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../bloc/auth_bloc.dart';
@@ -114,7 +115,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           SizedBox(height: 20.h),
           Center(
             child: Lottie.asset(
-              'assets/lottie/Forgot Password.json',
+              AppAssets.medicalAppLottie,
               width: 260.w,
               height: 200.h,
               fit: BoxFit.contain,

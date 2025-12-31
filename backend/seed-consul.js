@@ -98,6 +98,7 @@ async function seedConfiguration() {
 
     // === AWS S3 Configuration ===
     'esante/common/AWS_REGION': 'eu-north-1',
+
     'esante/common/AWS_S3_BUCKET': 'esante-medical-documents',
 
     // === Email/SMTP Configuration ===
@@ -117,14 +118,14 @@ async function seedConfiguration() {
     'esante/common/ONESIGNAL_USER_AUTH_KEY': 'os_v2_app_ym33czabp5eo3gzhuld5sdpoiyt5t6xinqeeywmjkw5fxyjhtiht6a6o5lyoxeex6ub6qeyxrbhxn3kfmaa777zqf4lugfwdhou54ii',
 
     // === URLs (for inter-service communication) ===
-    'esante/common/FRONTEND_URL': 'http://192.168.1.20:3000',
-    'esante/common/ADMIN_URL': 'http://192.168.1.20:3001',
-    'esante/common/API_GATEWAY_URL': 'http://192.168.1.20:3000',
+    'esante/common/FRONTEND_URL': 'http://192.168.1.85:3000',
+    'esante/common/ADMIN_URL': 'http://192.168.1.85:3001',
+    'esante/common/API_GATEWAY_URL': 'http://192.168.1.85:3000',
     'esante/common/MOBILE_APP_SCHEME': 'esante://',
 
     // === Rate Limiting ===
-    'esante/common/RATE_LIMIT_WINDOW_MS': '900000',
-    'esante/common/RATE_LIMIT_MAX_REQUESTS': '100'
+    'esante/common/RATE_LIMIT_WINDOW_MS': '60000', // 1 minute
+    'esante/common/RATE_LIMIT_MAX_REQUESTS': '1000' // 1000 requests per minute
   };
 
   // ============================================================================

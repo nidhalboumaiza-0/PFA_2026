@@ -35,6 +35,46 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
     return false;
   }
 
+  /// Map ServerException to appropriate Failure type
+  Failure _mapExceptionToFailure(dynamic e) {
+    if (e is ServerException) {
+      // Network errors
+      if (e is NetworkException) {
+        return const NetworkFailure();
+      }
+      
+      // Validation errors
+      if (e.code == 'VALIDATION_ERROR' && e.details != null) {
+        final errors = (e.details['errors'] as List<dynamic>?)
+                ?.map((err) => FieldError(
+                      field: err['field'] ?? '',
+                      message: err['message'] ?? '',
+                    ))
+                .toList() ??
+            [];
+        return ValidationFailure(message: e.message, errors: errors);
+      }
+      
+      // Generic server error with proper code and message
+      return ServerFailure(
+        code: e.code,
+        message: e.message,
+        details: e.details,
+      );
+    }
+    
+    // Network check for non-ServerException errors
+    if (_isNetworkError(e)) {
+      return const NetworkFailure();
+    }
+    
+    // Unknown error
+    return ServerFailure(
+      code: 'UNKNOWN_ERROR',
+      message: e.toString(),
+    );
+  }
+
   // ============== Patient Operations ==============
 
   @override
@@ -74,7 +114,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         return const Left(NetworkFailure());
       }
       
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -83,7 +123,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
     required String doctorId,
     required DateTime appointmentDate,
     required String appointmentTime,
-    String? reason,
+    required String reason,
     String? notes,
   }) async {
     try {
@@ -96,7 +136,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -112,7 +152,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -132,7 +172,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -176,7 +216,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         return const Left(NetworkFailure());
       }
       
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -196,7 +236,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(slot);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -212,7 +252,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(result);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -250,7 +290,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         return const Left(NetworkFailure());
       }
       
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -288,7 +328,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         return const Left(NetworkFailure());
       }
       
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -302,7 +342,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -318,7 +358,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -338,7 +378,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -352,7 +392,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -368,7 +408,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -384,7 +424,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -433,7 +473,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         return const Left(NetworkFailure());
       }
       
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -443,7 +483,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       final stats = await remoteDataSource.getAppointmentStatistics();
       return Right(stats);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -459,7 +499,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 }

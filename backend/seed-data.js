@@ -37,17 +37,17 @@ const doctorProfiles = [
     {
         firstName: 'Ahmed',
         lastName: 'Ben Ali',
-        specialty: 'Médecine Générale',
-        subSpecialty: 'Médecine Familiale',
+        specialty: 'General Practice',
+        subSpecialty: 'Family Medicine',
         phone: '+216 71 123 456',
         licenseNumber: 'TN-MG-2015-001',
         yearsOfExperience: 12,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Tunis', year: 2012 },
-            { degree: 'Résidence en Médecine Générale', institution: 'Hôpital Charles Nicolle', year: 2015 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Tunis', year: 2012 },
+            { degree: 'Residency in General Medicine', institution: 'Charles Nicolle Hospital', year: 2015 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Cabinet Médical Ben Ali',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Ben Ali Medical Office',
         clinicAddress: {
             street: '45 Avenue Habib Bourguiba',
             city: 'Tunis',
@@ -55,7 +55,7 @@ const doctorProfiles = [
             zipCode: '1000',
             country: 'Tunisia'
         },
-        about: 'Médecin généraliste expérimenté avec plus de 12 ans de pratique. Spécialisé dans la médecine familiale et la prévention. Je m\'engage à offrir des soins personnalisés et attentifs à chaque patient.',
+        about: 'Experienced general practitioner with over 12 years of practice. Specialized in family medicine and prevention. Committed to providing personalized and attentive care to each patient.',
         consultationFee: 60,
         acceptsInsurance: true,
         rating: 4.8,
@@ -64,17 +64,17 @@ const doctorProfiles = [
     {
         firstName: 'Fatma',
         lastName: 'Trabelsi',
-        specialty: 'Cardiologie',
-        subSpecialty: 'Échocardiographie',
+        specialty: 'Cardiology',
+        subSpecialty: 'Echocardiography',
         phone: '+216 71 234 567',
         licenseNumber: 'TN-CD-2010-042',
         yearsOfExperience: 18,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Sousse', year: 2006 },
-            { degree: 'Spécialisation Cardiologie', institution: 'Hôpital La Rabta', year: 2010 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Sousse', year: 2006 },
+            { degree: 'Cardiology Specialization', institution: 'La Rabta Hospital', year: 2010 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Centre Cardiologique Trabelsi',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Trabelsi Cardiology Center',
         clinicAddress: {
             street: '123 Rue de Marseille, Les Berges du Lac',
             city: 'Tunis',
@@ -82,7 +82,7 @@ const doctorProfiles = [
             zipCode: '1053',
             country: 'Tunisia'
         },
-        about: 'Cardiologue certifiée avec une expertise en échocardiographie et maladies cardiovasculaires. Je combine les dernières avancées médicales avec une approche humaine.',
+        about: 'Board-certified cardiologist with expertise in echocardiography and cardiovascular diseases. Combining the latest medical advances with a human approach.',
         consultationFee: 100,
         acceptsInsurance: true,
         rating: 4.9,
@@ -91,17 +91,17 @@ const doctorProfiles = [
     {
         firstName: 'Youssef',
         lastName: 'Hammami',
-        specialty: 'Dermatologie',
-        subSpecialty: 'Dermatologie Esthétique',
+        specialty: 'Dermatology',
+        subSpecialty: 'Aesthetic Dermatology',
         phone: '+216 71 345 678',
         licenseNumber: 'TN-DM-2013-089',
         yearsOfExperience: 14,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Tunis', year: 2009 },
-            { degree: 'Diplôme de Dermatologie', institution: 'Hôpital Habib Thameur', year: 2013 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Tunis', year: 2009 },
+            { degree: 'Dermatology Diploma', institution: 'Habib Thameur Hospital', year: 2013 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Clinique Dermatologique Hammami',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Hammami Dermatology Clinic',
         clinicAddress: {
             street: '78 Avenue de la Liberté, Belvédère',
             city: 'Tunis',
@@ -109,7 +109,7 @@ const doctorProfiles = [
             zipCode: '1002',
             country: 'Tunisia'
         },
-        about: 'Dermatologue spécialisé dans le traitement des maladies de la peau et la dermatologie esthétique. J\'utilise des techniques modernes pour des résultats optimaux.',
+        about: 'Dermatologist specialized in skin disease treatment and aesthetic dermatology. Using modern techniques for optimal results.',
         consultationFee: 80,
         acceptsInsurance: true,
         rating: 4.7,
@@ -118,17 +118,17 @@ const doctorProfiles = [
     {
         firstName: 'Khadija',
         lastName: 'Sassi',
-        specialty: 'Pédiatrie',
-        subSpecialty: 'Néonatologie',
+        specialty: 'Pediatrics',
+        subSpecialty: 'Neonatology',
         phone: '+216 71 456 789',
         licenseNumber: 'TN-PD-2011-156',
         yearsOfExperience: 16,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Monastir', year: 2007 },
-            { degree: 'Spécialisation Pédiatrie', institution: 'Hôpital d\'Enfants de Tunis', year: 2011 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Monastir', year: 2007 },
+            { degree: 'Pediatrics Specialization', institution: 'Children\'s Hospital of Tunis', year: 2011 }
         ],
-        languages: ['Français', 'Arabe'],
-        clinicName: 'Cabinet Pédiatrique Sassi',
+        languages: ['French', 'Arabic'],
+        clinicName: 'Sassi Pediatric Office',
         clinicAddress: {
             street: '34 Rue Alain Savary, El Menzah',
             city: 'Tunis',
@@ -136,7 +136,7 @@ const doctorProfiles = [
             zipCode: '1004',
             country: 'Tunisia'
         },
-        about: 'Pédiatre dévouée avec une passion pour la santé des enfants. Spécialisée en néonatologie, j\'accompagne les familles avec bienveillance et professionnalisme.',
+        about: 'Dedicated pediatrician passionate about children\'s health. Specialized in neonatology, supporting families with care and professionalism.',
         consultationFee: 70,
         acceptsInsurance: true,
         rating: 4.9,
@@ -145,17 +145,17 @@ const doctorProfiles = [
     {
         firstName: 'Omar',
         lastName: 'Chaabane',
-        specialty: 'Ophtalmologie',
-        subSpecialty: 'Chirurgie Réfractive',
+        specialty: 'Ophthalmology',
+        subSpecialty: 'Refractive Surgery',
         phone: '+216 71 567 890',
         licenseNumber: 'TN-OP-2008-023',
         yearsOfExperience: 20,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Tunis', year: 2003 },
-            { degree: 'Fellowship Chirurgie Réfractive', institution: 'Institut Hedi Raies d\'Ophtalmologie', year: 2008 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Tunis', year: 2003 },
+            { degree: 'Refractive Surgery Fellowship', institution: 'Hedi Raies Institute of Ophthalmology', year: 2008 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Centre Ophtalmologique Chaabane',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Chaabane Ophthalmology Center',
         clinicAddress: {
             street: '92 Avenue de Paris, Lafayette',
             city: 'Tunis',
@@ -163,7 +163,7 @@ const doctorProfiles = [
             zipCode: '1000',
             country: 'Tunisia'
         },
-        about: 'Ophtalmologue expert en chirurgie réfractive (LASIK, PKR). 20 ans d\'expérience dans le traitement des pathologies oculaires avec les technologies les plus avancées.',
+        about: 'Expert ophthalmologist in refractive surgery (LASIK, PRK). 20 years of experience treating eye conditions with the most advanced technologies.',
         consultationFee: 90,
         acceptsInsurance: true,
         rating: 4.8,
@@ -172,17 +172,17 @@ const doctorProfiles = [
     {
         firstName: 'Salma',
         lastName: 'Bouazizi',
-        specialty: 'Gynécologie',
-        subSpecialty: 'Obstétrique',
+        specialty: 'Gynecology',
+        subSpecialty: 'Obstetrics',
         phone: '+216 71 678 901',
         licenseNumber: 'TN-GY-2012-078',
         yearsOfExperience: 15,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Sfax', year: 2008 },
-            { degree: 'DES Gynécologie-Obstétrique', institution: 'Hôpital Wassila Bourguiba', year: 2012 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Sfax', year: 2008 },
+            { degree: 'Obstetrics & Gynecology Residency', institution: 'Wassila Bourguiba Hospital', year: 2012 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Cabinet Gynécologique Bouazizi',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Bouazizi Gynecology Office',
         clinicAddress: {
             street: '56 Rue de Palestine, Mutuelleville',
             city: 'Tunis',
@@ -190,7 +190,7 @@ const doctorProfiles = [
             zipCode: '1002',
             country: 'Tunisia'
         },
-        about: 'Gynécologue-obstétricienne passionnée par la santé féminine. J\'accompagne mes patientes à chaque étape de leur vie avec écoute et expertise.',
+        about: 'Obstetrician-gynecologist passionate about women\'s health. Supporting patients at every stage of their lives with expertise and compassion.',
         consultationFee: 85,
         acceptsInsurance: true,
         rating: 4.9,
@@ -199,17 +199,17 @@ const doctorProfiles = [
     {
         firstName: 'Rachid',
         lastName: 'Miled',
-        specialty: 'Orthopédie',
-        subSpecialty: 'Chirurgie du Genou',
+        specialty: 'Orthopedics',
+        subSpecialty: 'Knee Surgery',
         phone: '+216 71 789 012',
         licenseNumber: 'TN-OR-2009-034',
         yearsOfExperience: 19,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Tunis', year: 2004 },
-            { degree: 'Spécialisation Orthopédie', institution: 'Institut Kassab d\'Orthopédie', year: 2009 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Tunis', year: 2004 },
+            { degree: 'Orthopedics Specialization', institution: 'Kassab Orthopedic Institute', year: 2009 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Clinique Orthopédique Miled',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Miled Orthopedic Clinic',
         clinicAddress: {
             street: '112 Avenue Mohamed V, Centre Urbain Nord',
             city: 'Tunis',
@@ -217,7 +217,7 @@ const doctorProfiles = [
             zipCode: '1003',
             country: 'Tunisia'
         },
-        about: 'Chirurgien orthopédiste spécialisé dans la chirurgie du genou et les traumatismes sportifs. Je combine expertise chirurgicale et médecine sportive.',
+        about: 'Orthopedic surgeon specialized in knee surgery and sports injuries. Combining surgical expertise with sports medicine.',
         consultationFee: 95,
         acceptsInsurance: true,
         rating: 4.7,
@@ -226,17 +226,17 @@ const doctorProfiles = [
     {
         firstName: 'Nadia',
         lastName: 'Gharbi',
-        specialty: 'Psychiatrie',
-        subSpecialty: 'Psychothérapie',
+        specialty: 'Psychiatry',
+        subSpecialty: 'Psychotherapy',
         phone: '+216 71 890 123',
         licenseNumber: 'TN-PS-2014-067',
         yearsOfExperience: 13,
         education: [
-            { degree: 'Doctorat en Médecine', institution: 'Faculté de Médecine de Sousse', year: 2010 },
-            { degree: 'DES Psychiatrie', institution: 'Hôpital Razi', year: 2014 }
+            { degree: 'Doctor of Medicine', institution: 'Faculty of Medicine of Sousse', year: 2010 },
+            { degree: 'Psychiatry Residency', institution: 'Razi Hospital', year: 2014 }
         ],
-        languages: ['Français', 'Arabe', 'Anglais'],
-        clinicName: 'Cabinet de Psychiatrie Gharbi',
+        languages: ['French', 'Arabic', 'English'],
+        clinicName: 'Gharbi Psychiatry Office',
         clinicAddress: {
             street: '28 Rue du Lac Léman, Les Berges du Lac',
             city: 'Tunis',
@@ -244,7 +244,7 @@ const doctorProfiles = [
             zipCode: '1053',
             country: 'Tunisia'
         },
-        about: 'Psychiatre et psychothérapeute, je propose une approche globale de la santé mentale. Spécialisée dans l\'anxiété, la dépression et les troubles de l\'humeur.',
+        about: 'Psychiatrist and psychotherapist offering a comprehensive approach to mental health. Specialized in anxiety, depression, and mood disorders.',
         consultationFee: 100,
         acceptsInsurance: true,
         rating: 4.8,
@@ -608,6 +608,74 @@ const seed = async () => {
             clinicName: 'text',
             specialty: 'text'
         });
+
+        // ---------------------------------------------------------
+        // CREATE TIME SLOTS for the next 30 days for all doctors
+        // ---------------------------------------------------------
+        console.log('📅 Creating TimeSlots for next 30 days...');
+        
+        const timeSlots = [];
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        // Helper to generate time slots from working hours
+        const generateSlotsForDay = (workingHours, dayName) => {
+            const daySchedule = workingHours.find(wh => wh.day === dayName);
+            if (!daySchedule || !daySchedule.isAvailable) return [];
+            
+            const slots = [];
+            for (const period of daySchedule.slots) {
+                const [startHour, startMin] = period.startTime.split(':').map(Number);
+                const [endHour, endMin] = period.endTime.split(':').map(Number);
+                
+                let currentHour = startHour;
+                let currentMin = startMin;
+                
+                while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+                    slots.push({
+                        time: `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`,
+                        isBooked: false,
+                        appointmentId: null
+                    });
+                    
+                    // Increment by 30 minutes
+                    currentMin += 30;
+                    if (currentMin >= 60) {
+                        currentMin = 0;
+                        currentHour++;
+                    }
+                }
+            }
+            return slots;
+        };
+        
+        // Create time slots for next 30 days for each doctor
+        for (const doctor of doctors) {
+            for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
+                const date = new Date();
+                date.setDate(date.getDate() + dayOffset);
+                date.setHours(0, 0, 0, 0);
+                
+                const dayName = dayNames[date.getDay()];
+                const slots = generateSlotsForDay(doctor.workingHours, dayName);
+                
+                if (slots.length > 0) {
+                    timeSlots.push({
+                        _id: new mongoose.Types.ObjectId(),
+                        doctorId: doctor._id,  // Store as ObjectId (matches TimeSlot model schema)
+                        date: date,
+                        slots: slots,
+                        isAvailable: true,
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    });
+                }
+            }
+        }
+        
+        if (timeSlots.length > 0) {
+            await rdvConn.collection('timeslots').insertMany(timeSlots);
+            console.log(`   ✅ Created ${timeSlots.length} TimeSlot entries for ${doctors.length} doctors`);
+        }
 
         console.log('✨ Database Seeding Completed Successfully!');
         console.log('-------------------------------------------');

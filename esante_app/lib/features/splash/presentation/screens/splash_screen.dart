@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:lottie/lottie.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../injection_container.dart';
 import '../../../auth/domain/entities/user_entity.dart';
@@ -145,25 +147,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo/Icon
-                    Container(
-                      width: 120.w,
-                      height: 120.h,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(30.r),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.medical_services_rounded,
-                        size: 60.sp,
-                        color: AppColors.primary,
+                    // Logo Animation
+                    SizedBox(
+                      width: 180.w,
+                      height: 180.h,
+                      child: Lottie.asset(
+                        AppAssets.healthLogoLottie,
+                        fit: BoxFit.contain,
                       ),
                     ),
                     SizedBox(height: 24.h),

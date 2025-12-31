@@ -1,7 +1,7 @@
 import Patient from '../models/Patient.js';
 import Doctor from '../models/Doctor.js';
 import { uploadToS3, deleteFromS3, getSignedUrl } from '../services/s3Service.js';
-import { kafkaProducer, TOPICS, createEvent, cacheGet, cacheSet, cacheDelete, CACHE_KEYS, CACHE_TTL } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, cacheGet, cacheSet, cacheDelete, CACHE_KEYS, CACHE_TTL, sendError, sendSuccess } from '../../../../shared/index.js';
 import axios from 'axios';
 
 /**
@@ -42,15 +42,13 @@ export const getCurrentUser = async (req, res, next) => {
     } else if (role === 'doctor') {
       profile = await Doctor.findOne({ userId });
     } else {
-      return res.status(400).json({
-        message: 'Invalid user role'
-      });
+      return sendError(res, 400, 'INVALID_ROLE',
+        'Invalid user role. Please contact support.');
     }
 
     if (!profile) {
-      return res.status(404).json({
-        message: 'Profile not found'
-      });
+      return sendError(res, 404, 'PROFILE_NOT_FOUND',
+        'Your profile was not found. Please complete your registration.');
     }
 
     // Convert profile to plain object and add signed URL for profile photo
@@ -81,17 +79,15 @@ export const updatePatientProfile = async (req, res, next) => {
     const { id: userId, role } = req.user;
 
     if (role !== 'patient') {
-      return res.status(403).json({
-        message: 'Only patients can update patient profiles'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'Only patients can update patient profiles.');
     }
 
     const patient = await Patient.findOne({ userId });
 
     if (!patient) {
-      return res.status(404).json({
-        message: 'Patient profile not found'
-      });
+      return sendError(res, 404, 'PROFILE_NOT_FOUND',
+        'Patient profile not found. Please complete your registration.');
     }
 
     // Update fields
@@ -136,17 +132,15 @@ export const updateDoctorProfile = async (req, res, next) => {
     const { id: userId, role } = req.user;
 
     if (role !== 'doctor') {
-      return res.status(403).json({
-        message: 'Only doctors can update doctor profiles'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'Only doctors can update doctor profiles.');
     }
 
     const doctor = await Doctor.findOne({ userId });
 
     if (!doctor) {
-      return res.status(404).json({
-        message: 'Doctor profile not found'
-      });
+      return sendError(res, 404, 'PROFILE_NOT_FOUND',
+        'Doctor profile not found. Please complete your registration.');
     }
 
     // Track changes for Kafka event
@@ -226,9 +220,8 @@ export const updateDoctorProfile = async (req, res, next) => {
 export const uploadProfilePhoto = async (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        message: 'No file uploaded'
-      });
+      return sendError(res, 400, 'NO_FILE',
+        'No file uploaded. Please select a file to upload.');
     }
 
     const { id: userId, role } = req.user;
@@ -432,15 +425,13 @@ export const getDoctorById = async (req, res, next) => {
     const doctor = await Doctor.findById(doctorId).select('-__v');
 
     if (!doctor) {
-      return res.status(404).json({
-        message: 'Doctor not found'
-      });
+      return sendError(res, 404, 'DOCTOR_NOT_FOUND',
+        'The doctor you are looking for does not exist.');
     }
 
     if (!doctor.isActive || !doctor.isVerified) {
-      return res.status(404).json({
-        message: 'Doctor profile not available'
-      });
+      return sendError(res, 404, 'DOCTOR_NOT_AVAILABLE',
+        'This doctor profile is not currently available.');
     }
 
     // Convert to object and generate signed URL for profile photo
@@ -473,9 +464,8 @@ export const getNearbyDoctors = async (req, res, next) => {
     const { latitude, longitude, radius = 5, specialty } = req.query;
 
     if (!latitude || !longitude) {
-      return res.status(400).json({
-        message: 'Latitude and longitude are required'
-      });
+      return sendError(res, 400, 'LOCATION_REQUIRED',
+        'Latitude and longitude are required to find nearby doctors.');
     }
 
     const query = {
@@ -534,9 +524,8 @@ export const verifyDoctor = async (req, res, next) => {
     const doctor = await Doctor.findById(doctorId);
 
     if (!doctor) {
-      return res.status(404).json({
-        message: 'Doctor not found'
-      });
+      return sendError(res, 404, 'DOCTOR_NOT_FOUND',
+        'The doctor you are looking for does not exist.');
     }
 
     doctor.isVerified = true;
@@ -569,9 +558,8 @@ export const updateOneSignalPlayerId = async (req, res, next) => {
     const { oneSignalPlayerId } = req.body;
 
     if (!oneSignalPlayerId) {
-      return res.status(400).json({
-        message: 'OneSignal Player ID is required'
-      });
+      return sendError(res, 400, 'VALIDATION_ERROR',
+        'OneSignal Player ID is required.');
     }
 
     let profile;
@@ -582,9 +570,8 @@ export const updateOneSignalPlayerId = async (req, res, next) => {
     }
 
     if (!profile) {
-      return res.status(404).json({
-        message: 'Profile not found'
-      });
+      return sendError(res, 404, 'PROFILE_NOT_FOUND',
+        'Profile not found. Please complete your registration.');
     }
 
     profile.oneSignalPlayerId = oneSignalPlayerId;

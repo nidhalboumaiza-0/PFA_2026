@@ -19,6 +19,7 @@ class CustomTextField extends StatefulWidget {
   final void Function(String)? onSubmitted;
   final FocusNode? focusNode;
   final bool autofocus;
+  final String? errorText;
 
   const CustomTextField({
     super.key,
@@ -38,6 +39,7 @@ class CustomTextField extends StatefulWidget {
     this.onSubmitted,
     this.focusNode,
     this.autofocus = false,
+    this.errorText,
   });
 
   @override
@@ -105,12 +107,15 @@ class _CustomTextFieldState extends State<CustomTextField> {
           ),
           decoration: InputDecoration(
             hintText: widget.hintText,
+            errorText: widget.errorText,
             prefixIcon: widget.prefixIcon != null
                 ? Icon(
                     widget.prefixIcon,
-                    color: _isFocused
-                        ? AppColors.primary
-                        : context.textHintColor,
+                    color: widget.errorText != null
+                        ? AppColors.error
+                        : _isFocused
+                            ? AppColors.primary
+                            : context.textHintColor,
                     size: 22.sp,
                   )
                 : null,

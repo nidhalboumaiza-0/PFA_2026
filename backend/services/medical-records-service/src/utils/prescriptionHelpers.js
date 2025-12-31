@@ -23,24 +23,48 @@ export const verifyConsultationOwnership = (consultation, doctorId) => {
 };
 
 /**
+ * Validate that at least 10 minutes have passed since consultation start
+ * @param {Object} consultation - Consultation document
+ * @returns {Object} { allowed: boolean, remainingMinutes?: number, message?: string }
+ */
+export const validatePrescriptionTiming = (consultation) => {
+  const consultationStart = new Date(consultation.consultationDate);
+  const now = new Date();
+  const tenMinutesInMs = 10 * 60 * 1000; // 10 minutes
+
+  const timeSinceStart = now.getTime() - consultationStart.getTime();
+
+  if (timeSinceStart < tenMinutesInMs) {
+    const remainingMinutes = Math.ceil((tenMinutesInMs - timeSinceStart) / 60000);
+    return {
+      allowed: false,
+      remainingMinutes,
+      message: `Prescription can only be created 10 minutes after consultation start. Please wait ${remainingMinutes} more minute(s).`
+    };
+  }
+
+  return { allowed: true };
+};
+
+/**
  * Format remaining time in human-readable format
  */
 export const formatRemainingTime = (minutes) => {
   if (minutes <= 0) {
     return 'Expired';
   }
-  
+
   if (minutes < 60) {
     return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
   }
-  
+
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  
+
   if (mins === 0) {
     return `${hours} hour${hours !== 1 ? 's' : ''}`;
   }
-  
+
   return `${hours} hour${hours !== 1 ? 's' : ''} ${mins} minute${mins !== 1 ? 's' : ''}`;
 };
 
@@ -49,7 +73,7 @@ export const formatRemainingTime = (minutes) => {
  */
 export const buildPrescriptionDateQuery = (startDate, endDate) => {
   const query = {};
-  
+
   if (startDate || endDate) {
     query.prescriptionDate = {};
     if (startDate) {
@@ -59,7 +83,7 @@ export const buildPrescriptionDateQuery = (startDate, endDate) => {
       query.prescriptionDate.$lte = new Date(endDate);
     }
   }
-  
+
   return query;
 };
 
@@ -68,7 +92,7 @@ export const buildPrescriptionDateQuery = (startDate, endDate) => {
  */
 export const formatPrescriptionForList = async (prescription) => {
   const doctor = await getDoctorBasicInfo(prescription.doctorId);
-  
+
   return {
     id: prescription._id,
     date: prescription.prescriptionDate,
@@ -87,7 +111,7 @@ export const formatModificationHistory = async (history) => {
   return Promise.all(
     history.map(async (entry) => {
       let modifiedByInfo = null;
-      
+
       if (entry.modifiedBy) {
         const doctor = await getDoctorBasicInfo(entry.modifiedBy);
         modifiedByInfo = {
@@ -95,7 +119,7 @@ export const formatModificationHistory = async (history) => {
           name: doctor.name
         };
       }
-      
+
       return {
         modifiedAt: entry.modifiedAt,
         modifiedBy: modifiedByInfo,
@@ -113,37 +137,37 @@ const formatChanges = (changeType, changes, previousData) => {
   switch (changeType) {
     case 'created':
       return 'Initial prescription created';
-    
+
     case 'auto_locked':
       return 'Prescription automatically locked after 1 hour';
-    
+
     case 'manual_locked':
       return 'Prescription manually locked by doctor';
-    
+
     case 'updated':
       const changeDescriptions = {};
-      
+
       if (changes.medications && previousData?.medications) {
         // Compare medications
         const oldMeds = previousData.medications.map(m => m.medicationName).join(', ');
         const newMeds = changes.medications ? 'Updated' : oldMeds;
         changeDescriptions.medications = `Medications modified`;
       }
-      
+
       if (changes.generalInstructions !== undefined) {
         changeDescriptions.generalInstructions = 'General instructions updated';
       }
-      
+
       if (changes.specialWarnings !== undefined) {
         changeDescriptions.specialWarnings = 'Special warnings updated';
       }
-      
+
       if (changes.status !== undefined) {
         changeDescriptions.status = `Status changed to ${changes.status}`;
       }
-      
+
       return changeDescriptions;
-    
+
     default:
       return changes;
   }
@@ -175,23 +199,23 @@ export const createPrescriptionSnapshot = (prescription) => {
  */
 export const detectChanges = (oldData, newData) => {
   const changes = {};
-  
+
   if (JSON.stringify(oldData.medications) !== JSON.stringify(newData.medications)) {
     changes.medications = true;
   }
-  
+
   if (oldData.generalInstructions !== newData.generalInstructions) {
     changes.generalInstructions = true;
   }
-  
+
   if (oldData.specialWarnings !== newData.specialWarnings) {
     changes.specialWarnings = true;
   }
-  
+
   if (oldData.status !== newData.status) {
     changes.status = newData.status;
   }
-  
+
   return changes;
 };
 
@@ -201,7 +225,7 @@ export const detectChanges = (oldData, newData) => {
 export const getActivePrescriptionsQuery = (patientId, months = 3) => {
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - months);
-  
+
   return {
     patientId,
     status: 'active',

@@ -17,7 +17,7 @@ abstract class AppointmentRemoteDataSource {
     required String doctorId,
     required DateTime appointmentDate,
     required String appointmentTime,
-    String? reason,
+    required String reason,
     String? notes,
   });
 
@@ -131,10 +131,13 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
       queryParameters: queryParams,
     );
 
-    final slots = (response['availability'] as List<dynamic>?)
-            ?.map((s) => TimeSlotModel.fromJson(s as Map<String, dynamic>))
-            .toList() ??
-        [];
+    _log('viewDoctorAvailability', 'Response: $response');
+
+    // Backend returns { data: [...] } for this endpoint
+    final dataList = response['data'] as List<dynamic>? ?? [];
+    final slots = dataList
+        .map((s) => TimeSlotModel.fromJson(s as Map<String, dynamic>))
+        .toList();
 
     _log('viewDoctorAvailability', 'Found ${slots.length} days with availability');
     return slots;
@@ -145,7 +148,7 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
     required String doctorId,
     required DateTime appointmentDate,
     required String appointmentTime,
-    String? reason,
+    required String reason,
     String? notes,
   }) async {
     _log('requestAppointment', 'Requesting appointment with doctor: $doctorId');
@@ -156,8 +159,8 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
         'doctorId': doctorId,
         'appointmentDate': appointmentDate.toIso8601String(),
         'appointmentTime': appointmentTime,
-        if (reason != null) 'reason': reason,
-        if (notes != null) 'notes': notes,
+        'reason': reason,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
       },
     );
 

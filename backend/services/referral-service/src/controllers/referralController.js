@@ -1,5 +1,5 @@
 import Referral from '../models/Referral.js';
-import { kafkaProducer, TOPICS, createEvent } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess } from '../../../../shared/index.js';
 import {
   getUserInfo,
   getDoctorInfo,
@@ -46,39 +46,34 @@ export const createReferral = async (req, res, next) => {
     // Validate patient exists
     const patient = await getPatientInfo(patientId);
     if (!patient) {
-      return res.status(404).json({
-        message: 'Patient not found'
-      });
+      return sendError(res, 404, 'PATIENT_NOT_FOUND',
+        'The patient you are looking for does not exist.');
     }
 
     // Verify doctor has treated patient
     const hasTreated = await hasDoctorTreatedPatient(referringDoctorId, patientId);
     if (!hasTreated) {
-      return res.status(403).json({
-        message: 'You can only refer patients you have treated'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only refer patients you have treated.');
     }
 
     // Validate target doctor exists
     const targetDoctor = await getDoctorInfo(targetDoctorId);
     if (!targetDoctor) {
-      return res.status(404).json({
-        message: 'Target doctor not found'
-      });
+      return sendError(res, 404, 'DOCTOR_NOT_FOUND',
+        'The target doctor does not exist.');
     }
 
     // Verify target doctor is active and verified
     if (!targetDoctor.isVerified || !targetDoctor.isActive) {
-      return res.status(400).json({
-        message: 'Target doctor is not available for referrals'
-      });
+      return sendError(res, 400, 'DOCTOR_NOT_AVAILABLE',
+        'Target doctor is not available for referrals.');
     }
 
     // Verify specialty matches
     if (targetDoctor.specialty.toLowerCase() !== specialty.toLowerCase()) {
-      return res.status(400).json({
-        message: `Target doctor specialty (${targetDoctor.specialty}) does not match requested specialty (${specialty})`
-      });
+      return sendError(res, 400, 'SPECIALTY_MISMATCH',
+        `Target doctor specialty (${targetDoctor.specialty}) does not match requested specialty (${specialty}).`);
     }
 
     // Verify attached documents belong to patient
@@ -89,9 +84,8 @@ export const createReferral = async (req, res, next) => {
         req.headers.authorization
       );
       if (!documentsValid) {
-        return res.status(400).json({
-          message: 'One or more attached documents do not belong to this patient'
-        });
+        return sendError(res, 400, 'INVALID_DOCUMENTS',
+          'One or more attached documents do not belong to this patient.');
       }
     }
 
@@ -167,16 +161,14 @@ export const getReferralById = async (req, res, next) => {
     const referral = await Referral.findById(referralId);
 
     if (!referral) {
-      return res.status(404).json({
-        message: 'Referral not found'
-      });
+      return sendError(res, 404, 'REFERRAL_NOT_FOUND',
+        'The referral you are looking for does not exist.');
     }
 
     // Verify access
     if (!referral.canUserView(userId, role)) {
-      return res.status(403).json({
-        message: 'You do not have access to this referral'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You do not have access to this referral.');
     }
 
     // Get related information
@@ -342,30 +334,26 @@ export const bookAppointmentForReferral = async (req, res, next) => {
     const referral = await Referral.findById(referralId);
 
     if (!referral) {
-      return res.status(404).json({
-        message: 'Referral not found'
-      });
+      return sendError(res, 404, 'REFERRAL_NOT_FOUND',
+        'The referral you are looking for does not exist.');
     }
 
     // Verify ownership
     if (!referral.canUserUpdate(referringDoctorId)) {
-      return res.status(403).json({
-        message: 'You can only book appointments for referrals you created'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only book appointments for referrals you created.');
     }
 
     // Check referral status
     if (!['pending', 'accepted'].includes(referral.status)) {
-      return res.status(400).json({
-        message: `Cannot book appointment. Referral status is: ${referral.status}`
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        `Cannot book appointment. Referral status is: ${referral.status}`);
     }
 
     // Check if appointment already booked
     if (referral.isAppointmentBooked) {
-      return res.status(400).json({
-        message: 'Appointment already booked for this referral'
-      });
+      return sendError(res, 400, 'APPOINTMENT_EXISTS',
+        'Appointment already booked for this referral.');
     }
 
     // Check doctor availability
@@ -376,9 +364,8 @@ export const bookAppointmentForReferral = async (req, res, next) => {
     );
 
     if (!isAvailable) {
-      return res.status(400).json({
-        message: 'Target doctor is not available at the specified date and time'
-      });
+      return sendError(res, 400, 'SLOT_NOT_AVAILABLE',
+        'Target doctor is not available at the specified date and time.');
     }
 
     // Create appointment
@@ -610,23 +597,20 @@ export const acceptReferral = async (req, res, next) => {
     const referral = await Referral.findById(referralId);
 
     if (!referral) {
-      return res.status(404).json({
-        message: 'Referral not found'
-      });
+      return sendError(res, 404, 'REFERRAL_NOT_FOUND',
+        'The referral you are looking for does not exist.');
     }
 
     // Verify target doctor
     if (referral.targetDoctorId.toString() !== targetDoctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only accept referrals directed to you'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only accept referrals directed to you.');
     }
 
     // Check status
     if (!['pending', 'scheduled'].includes(referral.status)) {
-      return res.status(400).json({
-        message: `Cannot accept referral with status: ${referral.status}`
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        `Cannot accept referral with status: ${referral.status}`);
     }
 
     // Update referral
@@ -667,23 +651,20 @@ export const rejectReferral = async (req, res, next) => {
     const referral = await Referral.findById(referralId);
 
     if (!referral) {
-      return res.status(404).json({
-        message: 'Referral not found'
-      });
+      return sendError(res, 404, 'REFERRAL_NOT_FOUND',
+        'The referral you are looking for does not exist.');
     }
 
     // Verify target doctor
     if (referral.targetDoctorId.toString() !== targetDoctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only reject referrals directed to you'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only reject referrals directed to you.');
     }
 
     // Check status
     if (['completed', 'cancelled', 'rejected'].includes(referral.status)) {
-      return res.status(400).json({
-        message: `Cannot reject referral with status: ${referral.status}`
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        `Cannot reject referral with status: ${referral.status}`);
     }
 
     // Cancel appointment if booked
@@ -748,23 +729,20 @@ export const completeReferral = async (req, res, next) => {
     const referral = await Referral.findById(referralId);
 
     if (!referral) {
-      return res.status(404).json({
-        message: 'Referral not found'
-      });
+      return sendError(res, 404, 'REFERRAL_NOT_FOUND',
+        'The referral you are looking for does not exist.');
     }
 
     // Verify target doctor
     if (referral.targetDoctorId.toString() !== targetDoctorId.toString()) {
-      return res.status(403).json({
-        message: 'You can only complete referrals directed to you'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only complete referrals directed to you.');
     }
 
     // Check status
     if (!['accepted', 'scheduled', 'in_progress'].includes(referral.status)) {
-      return res.status(400).json({
-        message: `Cannot complete referral with status: ${referral.status}`
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        `Cannot complete referral with status: ${referral.status}`);
     }
 
     // Update referral
@@ -808,23 +786,20 @@ export const cancelReferral = async (req, res, next) => {
     const referral = await Referral.findById(referralId);
 
     if (!referral) {
-      return res.status(404).json({
-        message: 'Referral not found'
-      });
+      return sendError(res, 404, 'REFERRAL_NOT_FOUND',
+        'The referral you are looking for does not exist.');
     }
 
     // Verify user can cancel
     if (!referral.canUserCancel(userId, role)) {
-      return res.status(403).json({
-        message: 'You do not have permission to cancel this referral'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You do not have permission to cancel this referral.');
     }
 
     // Check status
     if (['completed', 'cancelled'].includes(referral.status)) {
-      return res.status(400).json({
-        message: `Cannot cancel referral with status: ${referral.status}`
-      });
+      return sendError(res, 400, 'INVALID_STATUS',
+        `Cannot cancel referral with status: ${referral.status}`);
     }
 
     // Cancel appointment if booked
@@ -915,9 +890,8 @@ export const getReferralStatistics = async (req, res, next) => {
     const { id: doctorId, role } = req.user;
 
     if (role !== 'doctor') {
-      return res.status(403).json({
-        message: 'Only doctors can view referral statistics'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'Only doctors can view referral statistics.');
     }
 
     // Check if doctor is referring or receiving referrals

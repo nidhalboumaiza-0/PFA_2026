@@ -42,7 +42,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
         return Right(_createEmptyProfile());
       }
       
-      return Left(ServerFailure(code: e.code, message: e.message));
+      return Left(ServerFailure(code: e.code, message: e.message, details: e.details));
     } catch (e) {
       _log('getPatientProfile', 'Error: $e');
       return Left(ServerFailure(
@@ -115,7 +115,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
       return Right(profile);
     } on ServerException catch (e) {
       _log('updatePatientProfile', 'ServerException: ${e.message}');
-      return Left(ServerFailure(code: e.code, message: e.message));
+      return Left(ServerFailure(code: e.code, message: e.message, details: e.details));
     } catch (e) {
       _log('updatePatientProfile', 'Error: $e');
       return Left(ServerFailure(
@@ -140,7 +140,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
         return Right(_createEmptyDoctorProfile());
       }
       
-      return Left(ServerFailure(code: e.code, message: e.message));
+      return Left(ServerFailure(code: e.code, message: e.message, details: e.details));
     } catch (e) {
       _log('getDoctorProfile', 'Error: $e');
       return Left(ServerFailure(
@@ -208,7 +208,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
       return Right(profile);
     } on ServerException catch (e) {
       _log('updateDoctorProfile', 'ServerException: ${e.message}');
-      return Left(ServerFailure(code: e.code, message: e.message));
+      return Left(ServerFailure(code: e.code, message: e.message, details: e.details));
     } catch (e) {
       _log('updateDoctorProfile', 'Error: $e');
       return Left(ServerFailure(
@@ -259,7 +259,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
       return Right(photoUrl);
     } on ServerException catch (e) {
       _log('uploadProfilePhoto', 'ServerException: ${e.message}');
-      return Left(ServerFailure(code: e.code, message: e.message));
+      return Left(ServerFailure(code: e.code, message: e.message, details: e.details));
     } catch (e) {
       _log('uploadProfilePhoto', 'Error: $e');
       return Left(ServerFailure(

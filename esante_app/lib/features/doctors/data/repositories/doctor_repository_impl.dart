@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import '../../../../core/error/failures.dart';
+import '../../../../core/error/exceptions.dart';
 import '../../domain/entities/doctor_entity.dart';
 import '../../domain/repositories/doctor_repository.dart';
 import '../datasources/doctor_remote_datasource.dart';
@@ -8,6 +9,34 @@ class DoctorRepositoryImpl implements DoctorRepository {
   final DoctorRemoteDataSource remoteDataSource;
 
   DoctorRepositoryImpl({required this.remoteDataSource});
+
+  /// Map exceptions to appropriate Failure types
+  Failure _mapExceptionToFailure(dynamic e) {
+    if (e is ServerException) {
+      if (e is NetworkException) {
+        return const NetworkFailure();
+      }
+      if (e.code == 'VALIDATION_ERROR' && e.details != null) {
+        final errors = (e.details['errors'] as List<dynamic>?)
+                ?.map((err) => FieldError(
+                      field: err['field'] ?? '',
+                      message: err['message'] ?? '',
+                    ))
+                .toList() ??
+            [];
+        return ValidationFailure(message: e.message, errors: errors);
+      }
+      return ServerFailure(
+        code: e.code,
+        message: e.message,
+        details: e.details,
+      );
+    }
+    return ServerFailure(
+      code: 'UNKNOWN_ERROR',
+      message: e.toString(),
+    );
+  }
 
   @override
   Future<Either<Failure, DoctorSearchResult>> searchDoctors({
@@ -39,7 +68,7 @@ class DoctorRepositoryImpl implements DoctorRepository {
         totalDoctors: response.totalDoctors,
       ));
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -69,7 +98,7 @@ class DoctorRepositoryImpl implements DoctorRepository {
         totalDoctors: response.totalDoctors,
       ));
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 
@@ -79,7 +108,7 @@ class DoctorRepositoryImpl implements DoctorRepository {
       final doctor = await remoteDataSource.getDoctorById(doctorId);
       return Right(doctor);
     } catch (e) {
-      return Left(ServerFailure(code: 'SERVER_ERROR', message: e.toString()));
+      return Left(_mapExceptionToFailure(e));
     }
   }
 }

@@ -1,6 +1,6 @@
 import MedicalDocument from '../models/MedicalDocument.js';
 import Consultation from '../models/Consultation.js';
-import { kafkaProducer, TOPICS, createEvent } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess } from '../../../../shared/index.js';
 import {
   uploadDocumentToS3,
   getSignedUrl,
@@ -40,9 +40,8 @@ export const uploadDocument = async (req, res, next) => {
 
     // Validate file
     if (!req.file) {
-      return res.status(400).json({
-        message: 'No file provided'
-      });
+      return sendError(res, 400, 'NO_FILE',
+        'No file provided. Please select a file to upload.');
     }
 
     validateFile(req.file);
@@ -57,9 +56,8 @@ export const uploadDocument = async (req, res, next) => {
       uploaderType = 'patient';
     } else if (role === 'doctor') {
       if (!providedPatientId) {
-        return res.status(400).json({
-          message: 'Patient ID is required when doctor uploads document'
-        });
+        return sendError(res, 400, 'PATIENT_ID_REQUIRED',
+          'Patient ID is required when doctor uploads document.');
       }
       patientId = providedPatientId;
       uploaderType = 'doctor';
@@ -70,14 +68,12 @@ export const uploadDocument = async (req, res, next) => {
     if (consultationId) {
       const consultation = await Consultation.findById(consultationId);
       if (!consultation) {
-        return res.status(404).json({
-          message: 'Consultation not found'
-        });
+        return sendError(res, 404, 'CONSULTATION_NOT_FOUND',
+          'The consultation you are looking for does not exist.');
       }
       if (consultation.patientId.toString() !== patientId.toString()) {
-        return res.status(400).json({
-          message: 'Consultation does not belong to this patient'
-        });
+        return sendError(res, 400, 'CONSULTATION_MISMATCH',
+          'Consultation does not belong to this patient.');
       }
     }
 
@@ -168,23 +164,20 @@ export const getDocumentById = async (req, res, next) => {
     const document = await MedicalDocument.findById(documentId);
 
     if (!document) {
-      return res.status(404).json({
-        message: 'Document not found'
-      });
+      return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+        'The document you are looking for does not exist.');
     }
 
     if (document.status === 'deleted') {
-      return res.status(404).json({
-        message: 'Document has been deleted'
-      });
+      return sendError(res, 404, 'DOCUMENT_DELETED',
+        'This document has been deleted.');
     }
 
     // Verify access
     const hasAccess = await document.canUserAccess(userId, role);
     if (!hasAccess) {
-      return res.status(403).json({
-        message: 'You do not have access to this document'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You do not have access to this document.');
     }
 
     // Get uploader info
@@ -258,9 +251,8 @@ export const getPatientDocuments = async (req, res, next) => {
     // Verify doctor has treated this patient
     const hasTreated = await hasDoctorTreatedPatient(Consultation, doctorId, patientId);
     if (!hasTreated) {
-      return res.status(403).json({
-        message: 'You can only view documents for patients you have treated'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only view documents for patients you have treated.');
     }
 
     // Build query
@@ -320,24 +312,21 @@ export const getConsultationDocuments = async (req, res, next) => {
     // Verify consultation exists and user has access
     const consultation = await Consultation.findById(consultationId);
     if (!consultation) {
-      return res.status(404).json({
-        message: 'Consultation not found'
-      });
+      return sendError(res, 404, 'CONSULTATION_NOT_FOUND',
+        'The consultation you are looking for does not exist.');
     }
 
     // Verify access
     if (role === 'patient' && consultation.patientId.toString() !== userId.toString()) {
-      return res.status(403).json({
-        message: 'You can only view your own consultation documents'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only view your own consultation documents.');
     }
 
     if (role === 'doctor') {
       const hasAccess = await consultation.canDoctorAccess(userId);
       if (!hasAccess) {
-        return res.status(403).json({
-          message: 'You do not have access to this consultation'
-        });
+        return sendError(res, 403, 'FORBIDDEN',
+          'You do not have access to this consultation.');
       }
     }
 
@@ -413,16 +402,14 @@ export const updateDocument = async (req, res, next) => {
     const document = await MedicalDocument.findById(documentId);
 
     if (!document) {
-      return res.status(404).json({
-        message: 'Document not found'
-      });
+      return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+        'The document you are looking for does not exist.');
     }
 
     // Verify ownership
     if (!document.canUserEdit(userId)) {
-      return res.status(403).json({
-        message: 'You can only edit documents you uploaded'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only edit documents you uploaded.');
     }
 
     // Track changes
@@ -480,16 +467,14 @@ export const deleteDocument = async (req, res, next) => {
     const document = await MedicalDocument.findById(documentId);
 
     if (!document) {
-      return res.status(404).json({
-        message: 'Document not found'
-      });
+      return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+        'The document you are looking for does not exist.');
     }
 
     // Verify ownership
     if (!document.canUserDelete(userId)) {
-      return res.status(403).json({
-        message: 'You can only delete documents you uploaded'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only delete documents you uploaded.');
     }
 
     // Soft delete
@@ -528,23 +513,20 @@ export const downloadDocument = async (req, res, next) => {
     const document = await MedicalDocument.findById(documentId);
 
     if (!document) {
-      return res.status(404).json({
-        message: 'Document not found'
-      });
+      return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+        'The document you are looking for does not exist.');
     }
 
     if (document.status === 'deleted') {
-      return res.status(404).json({
-        message: 'Document has been deleted'
-      });
+      return sendError(res, 404, 'DOCUMENT_DELETED',
+        'This document has been deleted.');
     }
 
     // Verify access
     const hasAccess = await document.canUserAccess(userId, role);
     if (!hasAccess) {
-      return res.status(403).json({
-        message: 'You do not have access to this document'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You do not have access to this document.');
     }
 
     // Generate download URL (expires in 5 minutes)
@@ -583,16 +565,14 @@ export const updateDocumentSharing = async (req, res, next) => {
     const document = await MedicalDocument.findById(documentId);
 
     if (!document) {
-      return res.status(404).json({
-        message: 'Document not found'
-      });
+      return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+        'The document you are looking for does not exist.');
     }
 
     // Verify patient owns this document
     if (document.patientId.toString() !== patientId.toString()) {
-      return res.status(403).json({
-        message: 'You can only manage sharing for your own documents'
-      });
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only manage sharing for your own documents.');
     }
 
     document.isSharedWithAllDoctors = isSharedWithAllDoctors;

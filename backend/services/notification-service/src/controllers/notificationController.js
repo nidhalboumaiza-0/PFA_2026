@@ -9,6 +9,7 @@ import {
   unregisterDevice,
 } from '../services/notificationService.js';
 import { formatNotificationForResponse, calculatePagination } from '../utils/helpers.js';
+import { sendError, sendSuccess } from '../../../../shared/index.js';
 
 /**
  * Get notifications for current user
@@ -85,10 +86,8 @@ export const markAsRead = async (req, res) => {
     console.error('Error marking notification as read:', error);
     
     if (error.message === 'Notification not found') {
-      return res.status(404).json({
-        success: false,
-        message: 'Notification not found',
-      });
+      return sendError(res, 404, 'NOTIFICATION_NOT_FOUND',
+        'Notification not found.');
     }
 
     res.status(500).json({
@@ -210,10 +209,8 @@ export const unregisterDeviceHandler = async (req, res) => {
     const removed = await unregisterDevice(userId, playerId);
 
     if (!removed) {
-      return res.status(404).json({
-        success: false,
-        message: 'Device not found',
-      });
+      return sendError(res, 404, 'DEVICE_NOT_FOUND',
+        'Device not found.');
     }
 
     res.json({

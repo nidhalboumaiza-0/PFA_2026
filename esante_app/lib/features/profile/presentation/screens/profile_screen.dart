@@ -4,8 +4,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/navigation_utils.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
+import '../../../prescriptions/presentation/screens/my_prescriptions_screen.dart';
 import '../../domain/entities/patient_profile_entity.dart';
 import '../../domain/usecases/check_profile_completion_usecase.dart';
 import '../blocs/patient_profile/profile_bloc.dart';
@@ -599,20 +601,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
       onEdit: () {
         _navigateToEditProfile(context, profile);
       },
-      items: [
-        InfoItem(
+      children: [
+        InfoRow(
           label: 'Allergies',
           value: profile.allergies?.isNotEmpty == true
               ? profile.allergies!.join(', ')
-              : null,
+              : 'None',
           icon: Icons.warning_amber_rounded,
         ),
-        InfoItem(
+        Divider(color: AppColors.divider(context), height: 24.h),
+        InfoRow(
           label: 'Chronic Diseases',
           value: profile.chronicDiseases?.isNotEmpty == true
               ? profile.chronicDiseases!.join(', ')
-              : null,
-          icon: Icons.healing_outlined,
+              : 'None',
+              icon: Icons.healing_outlined,
+        ),
+        Divider(color: AppColors.divider(context), height: 24.h),
+        InkWell(
+          onTap: () => context.pushPage(
+            const MyPrescriptionsScreen(),
+            transition: NavTransition.slideLeft,
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.h),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.receipt_long_rounded,
+                  color: AppColors.primary,
+                  size: 20.sp,
+                ),
+                SizedBox(width: 12.w),
+                Text(
+                  'View Prescriptions',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: AppColors.primary,
+                  size: 16.sp,
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );

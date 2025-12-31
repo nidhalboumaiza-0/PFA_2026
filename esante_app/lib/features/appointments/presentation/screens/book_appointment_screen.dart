@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:table_calendar/table_calendar.dart';
+import 'package:lottie/lottie.dart';
+import 'package:easy_date_timeline/easy_date_timeline.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
@@ -45,8 +47,9 @@ class _BookAppointmentView extends StatefulWidget {
 class _BookAppointmentViewState extends State<_BookAppointmentView> {
   final TextEditingController _reasonController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
-  DateTime _focusedDay = DateTime.now();
-  CalendarFormat _calendarFormat = CalendarFormat.week;
+  final EasyInfiniteDateTimelineController _dateController = EasyInfiniteDateTimelineController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  String? _reasonError;
 
   @override
   void dispose() {
@@ -126,6 +129,16 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Booking illustration
+          Center(
+            child: Lottie.asset(
+              AppAssets.waitingAppointmentLottie,
+              width: 160.w,
+              height: 120.h,
+              fit: BoxFit.contain,
+            ),
+          ),
+          
           // Doctor Info Header
           _buildDoctorHeader(),
           SizedBox(height: 16.h),
@@ -244,6 +257,7 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: EdgeInsets.all(16.r),
@@ -255,64 +269,137 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
               ],
             ),
           ),
-          TableCalendar(
-            firstDay: DateTime.now(),
-            lastDay: DateTime.now().add(const Duration(days: 60)),
-            focusedDay: _focusedDay,
-            calendarFormat: _calendarFormat,
-            selectedDayPredicate: (day) {
-              if (state.selectedDate == null) return false;
-              return day.year == state.selectedDate!.year &&
-                  day.month == state.selectedDate!.month &&
-                  day.day == state.selectedDate!.day;
+          EasyInfiniteDateTimeLine(
+            controller: _dateController,
+            firstDate: DateTime.now(),
+            focusDate: state.selectedDate ?? DateTime.now(),
+            lastDate: DateTime.now().add(const Duration(days: 60)),
+            onDateChange: (date) {
+              // Check if this date has available slots
+              final normalizedDate = DateTime(date.year, date.month, date.day);
+              if (availableDateSet.contains(normalizedDate)) {
+                context.read<PatientAppointmentBloc>().add(
+                      SelectDate(date: date),
+                    );
+              } else {
+                // Show message that no slots available for this date
+                AppSnackBar.warning(
+                  context,
+                  'No available slots on this date',
+                );
+              }
             },
-            enabledDayPredicate: (day) {
-              final normalizedDay = DateTime(day.year, day.month, day.day);
-              return availableDateSet.contains(normalizedDay);
-            },
-            onDaySelected: (selectedDay, focusedDay) {
-              setState(() {
-                _focusedDay = focusedDay;
-              });
-              context.read<PatientAppointmentBloc>().add(
-                    SelectDate(date: selectedDay),
-                  );
-            },
-            onFormatChanged: (format) {
-              setState(() {
-                _calendarFormat = format;
-              });
-            },
-            calendarStyle: CalendarStyle(
-              selectedDecoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
+            showTimelineHeader: false,
+            dayProps: EasyDayProps(
+              height: 80.h,
+              width: 64.w,
+              dayStructure: DayStructure.dayStrDayNum,
+              activeDayStyle: DayStyle(
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                dayStrStyle: TextStyle(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+                dayNumStyle: TextStyle(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-              todayDecoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
+              inactiveDayStyle: DayStyle(
+                decoration: BoxDecoration(
+                  color: AppColors.grey200.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                dayStrStyle: TextStyle(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.grey400,
+                ),
+                dayNumStyle: TextStyle(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.grey400,
+                ),
               ),
-              disabledTextStyle: TextStyle(
-                color: AppColors.grey300,
-                fontSize: 14.sp,
-              ),
-              defaultTextStyle: TextStyle(fontSize: 14.sp),
-              weekendTextStyle: TextStyle(fontSize: 14.sp),
-            ),
-            headerStyle: HeaderStyle(
-              formatButtonVisible: true,
-              titleCentered: true,
-              formatButtonDecoration: BoxDecoration(
-                border: Border.all(color: AppColors.primary),
-                borderRadius: BorderRadius.circular(8.r),
-              ),
-              formatButtonTextStyle: TextStyle(
-                color: AppColors.primary,
-                fontSize: 12.sp,
+              todayStyle: DayStyle(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12.r),
+                  border: Border.all(color: AppColors.primary, width: 2),
+                ),
+                dayStrStyle: TextStyle(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+                dayNumStyle: TextStyle(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
             ),
           ),
-          SizedBox(height: 8.h),
+          SizedBox(height: 12.h),
+          // Show availability legend
+          Padding(
+            padding: EdgeInsets.only(left: 16.w, right: 16.w, bottom: 12.h),
+            child: Row(
+              children: [
+                // Available indicator
+                Container(
+                  width: 12.w,
+                  height: 12.h,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(3.r),
+                    border: Border.all(color: AppColors.success, width: 1),
+                  ),
+                ),
+                SizedBox(width: 6.w),
+                Text(
+                  'Available',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(width: 16.w),
+                // Unavailable indicator
+                Container(
+                  width: 12.w,
+                  height: 12.h,
+                  decoration: BoxDecoration(
+                    color: AppColors.grey200,
+                    borderRadius: BorderRadius.circular(3.r),
+                  ),
+                ),
+                SizedBox(width: 6.w),
+                Text(
+                  'Unavailable',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: AppColors.grey400,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${availableDateSet.length} days',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: AppColors.grey400,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -408,10 +495,16 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
           SizedBox(height: 12.h),
           CustomTextField(
             controller: _reasonController,
-            hintText: 'Reason for visit (optional)',
-            label: 'Reason',
+            hintText: 'Reason for visit *',
+            label: 'Reason (Required)',
             prefixIcon: Icons.medical_information_outlined,
             maxLines: 2,
+            errorText: _reasonError,
+            onChanged: (value) {
+              if (_reasonError != null && value.isNotEmpty) {
+                setState(() => _reasonError = null);
+              }
+            },
           ),
           SizedBox(height: 12.h),
           CustomTextField(
@@ -435,16 +528,35 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
         icon: Icons.calendar_month,
         onPressed: state.canBook
             ? () {
+                // Validate required fields
+                if (_reasonController.text.trim().isEmpty) {
+                  setState(() {
+                    _reasonError = 'Please provide a reason for your visit';
+                  });
+                  AppSnackBar.warning(context, 'Please provide a reason for your appointment');
+                  return;
+                }
+                
+                if (_reasonController.text.trim().length > 500) {
+                  setState(() {
+                    _reasonError = 'Reason must be less than 500 characters';
+                  });
+                  return;
+                }
+                
+                if (_notesController.text.length > 1000) {
+                  AppSnackBar.warning(context, 'Notes must be less than 1000 characters');
+                  return;
+                }
+
                 context.read<PatientAppointmentBloc>().add(
                       RequestAppointment(
                         doctorId: widget.doctor.id,
                         appointmentDate: state.selectedDate!,
                         appointmentTime: state.selectedTime!,
-                        reason: _reasonController.text.isNotEmpty
-                            ? _reasonController.text
-                            : null,
-                        notes: _notesController.text.isNotEmpty
-                            ? _notesController.text
+                        reason: _reasonController.text.trim(),
+                        notes: _notesController.text.trim().isNotEmpty
+                            ? _notesController.text.trim()
                             : null,
                       ),
                     );

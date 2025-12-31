@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
@@ -99,32 +100,41 @@ class _DoctorSearchViewState extends State<_DoctorSearchView> {
         title: 'Find a Doctor',
         showBackButton: widget.showBackButton,
       ),
-      body: Column(
-        children: [
-          // Search Filters using CustomDropdown
-          _buildFilters(),
-          
-          // Results
-          Expanded(
-            child: BlocBuilder<DoctorSearchBloc, DoctorSearchState>(
-              builder: (context, state) {
-                if (state is DoctorSearchLoading) {
-                  return _buildShimmerLoading();
-                }
-
-                if (state is DoctorSearchError) {
-                  return _buildErrorState(state.message);
-                }
-
-                if (state is DoctorSearchLoaded) {
-                  return _buildDoctorList(state);
-                }
-
-                return _buildEmptyState();
-              },
+      body: BlocBuilder<DoctorSearchBloc, DoctorSearchState>(
+        builder: (context, state) {
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<DoctorSearchBloc>().add(
+                    GetCurrentLocation(specialty: _selectedSpecialty),
+                  );
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                // Search Filters
+                SliverToBoxAdapter(
+                  child: _buildFilters(),
+                ),
+                
+                // Results
+                if (state is DoctorSearchLoading)
+                  SliverFillRemaining(
+                    child: _buildShimmerLoading(),
+                  )
+                else if (state is DoctorSearchError)
+                  SliverFillRemaining(
+                    child: _buildErrorState(state.message),
+                  )
+                else if (state is DoctorSearchLoaded)
+                  ..._buildDoctorSliverList(state)
+                else
+                  SliverFillRemaining(
+                    child: _buildEmptyState(),
+                  ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -357,6 +367,46 @@ class _DoctorSearchViewState extends State<_DoctorSearchView> {
     );
   }
 
+  List<Widget> _buildDoctorSliverList(DoctorSearchLoaded state) {
+    if (state.doctors.isEmpty) {
+      return [
+        SliverFillRemaining(
+          child: _buildNoResultsState(),
+        ),
+      ];
+    }
+
+    return [
+      SliverPadding(
+        padding: EdgeInsets.all(16.r),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              if (index >= state.doctors.length) {
+                return Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.r),
+                    child: const CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              final doctor = state.doctors[index];
+              return Padding(
+                padding: EdgeInsets.only(bottom: 12.h),
+                child: DoctorCard(
+                  doctor: doctor,
+                  onTap: () => _navigateToDetail(doctor.id),
+                ),
+              );
+            },
+            childCount: state.doctors.length + (state.isLoadingMore ? 1 : 0),
+          ),
+        ),
+      ),
+    ];
+  }
+
   Widget _buildDoctorList(DoctorSearchLoaded state) {
     if (state.doctors.isEmpty) {
       return _buildNoResultsState();
@@ -397,63 +447,72 @@ class _DoctorSearchViewState extends State<_DoctorSearchView> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search,
-            size: 64.sp,
-            color: AppColors.grey300,
-          ),
-          SizedBox(height: 16.h),
-          AppTitle(
-            text: 'Search for doctors',
-            fontSize: 18.sp,
-          ),
-          SizedBox(height: 8.h),
-          AppSubtitle(
-            text: 'Find doctors near you by specialty',
-            fontSize: 14.sp,
-          ),
-        ],
+      child: Padding(
+        padding: EdgeInsets.all(24.r),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              AppAssets.onlineDoctorPanaImage,
+              width: 200.w,
+              height: 200.h,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(height: 24.h),
+            AppTitle(
+              text: 'Search for doctors',
+              fontSize: 18.sp,
+            ),
+            SizedBox(height: 8.h),
+            AppSubtitle(
+              text: 'Find doctors near you by specialty',
+              fontSize: 14.sp,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildNoResultsState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.person_search,
-            size: 64.sp,
-            color: AppColors.grey300,
-          ),
-          SizedBox(height: 16.h),
-          AppTitle(
-            text: 'No doctors found',
-            fontSize: 18.sp,
-          ),
-          SizedBox(height: 8.h),
-          AppSubtitle(
-            text: 'Try adjusting your filters or search area',
-            fontSize: 14.sp,
-          ),
-          SizedBox(height: 24.h),
-          CustomButton(
-            text: 'Clear Filters',
-            onPressed: () {
-              setState(() {
-                _selectedSpecialty = null;
-                _selectedRadius = 10.0;
-                _nameController.clear();
-              });
-              context.read<DoctorSearchBloc>().add(const GetCurrentLocation());
-            },
-            isOutlined: true,
-          ),
-        ],
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(24.r),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              AppAssets.medicalResearchImage,
+              width: 160.w,
+              height: 160.h,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(height: 20.h),
+            AppTitle(
+              text: 'No doctors found',
+              fontSize: 18.sp,
+            ),
+            SizedBox(height: 8.h),
+            AppSubtitle(
+              text: 'Try adjusting your filters or search area',
+              fontSize: 14.sp,
+            ),
+            SizedBox(height: 20.h),
+            CustomButton(
+              text: 'Clear Filters',
+              onPressed: () {
+                setState(() {
+                  _selectedSpecialty = null;
+                  _selectedRadius = 10.0;
+                  _nameController.clear();
+                });
+                context.read<DoctorSearchBloc>().add(const GetCurrentLocation());
+              },
+              isOutlined: true,
+            ),
+          ],
+        ),
       ),
     );
   }

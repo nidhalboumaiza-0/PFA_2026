@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:lottie/lottie.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../core/utils/navigation_utils.dart';
 import '../../../../injection_container.dart';
 import '../../domain/entities/appointment_entity.dart';
+import '../../../prescriptions/presentation/screens/create_prescription_screen.dart';
 import '../bloc/doctor/doctor_appointment_bloc.dart';
 import '../widgets/appointment_card.dart';
+import '../widgets/doctor_reschedule_dialog.dart';
 
 class DoctorAppointmentsScreen extends StatelessWidget {
   final bool showBackButton;
@@ -44,6 +49,10 @@ class _DoctorAppointmentsView extends StatefulWidget {
 class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
+  // Cache states to survive state changes from other screens (shared singleton BLoC)
+  DoctorAppointmentsLoaded? _cachedAppointmentsState;
+  AppointmentRequestsLoaded? _cachedRequestsState;
 
   @override
   void initState() {
@@ -99,6 +108,17 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
           // Content
           Expanded(
             child: BlocConsumer<DoctorAppointmentBloc, DoctorAppointmentState>(
+              listenWhen: (previous, current) {
+                // Listen to action results and errors
+                return current is AppointmentConfirmed ||
+                    current is AppointmentRejected ||
+                    current is AppointmentCompleted ||
+                    current is AppointmentRescheduled ||
+                    current is AppointmentCancelledByDoctor ||
+                    current is RescheduleApproved ||
+                    current is RescheduleRejected ||
+                    current is DoctorAppointmentError;
+              },
               listener: (context, state) {
                 if (state is AppointmentConfirmed) {
                   AppSnackBar.success(context, 'Appointment confirmed');
@@ -109,25 +129,64 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
                 } else if (state is AppointmentCompleted) {
                   AppSnackBar.success(context, 'Appointment completed');
                   _refreshData(context);
+                } else if (state is AppointmentRescheduled) {
+                  AppSnackBar.success(context, 'Appointment rescheduled successfully');
+                  _refreshData(context);
+                } else if (state is AppointmentCancelledByDoctor) {
+                  AppSnackBar.success(context, 'Appointment cancelled');
+                  _refreshData(context);
+                } else if (state is RescheduleApproved) {
+                  AppSnackBar.success(context, 'Reschedule request approved');
+                  _refreshData(context);
+                } else if (state is RescheduleRejected) {
+                  AppSnackBar.success(context, 'Reschedule request declined');
+                  _refreshData(context);
                 } else if (state is DoctorAppointmentError) {
                   AppSnackBar.error(context, state.message);
                 }
               },
+              buildWhen: (previous, current) {
+                // Only rebuild on states relevant to this screen
+                return current is DoctorAppointmentInitial ||
+                    current is DoctorAppointmentsLoading ||
+                    current is DoctorAppointmentsLoaded ||
+                    current is AppointmentRequestsLoading ||
+                    current is AppointmentRequestsLoaded ||
+                    current is AppointmentActionLoading ||
+                    current is DoctorAppointmentError;
+              },
               builder: (context, state) {
+                // Cache states when loaded
+                if (state is DoctorAppointmentsLoaded) {
+                  _cachedAppointmentsState = state;
+                }
+                if (state is AppointmentRequestsLoaded) {
+                  _cachedRequestsState = state;
+                }
+                
                 if (state is DoctorAppointmentsLoading ||
                     state is AppointmentRequestsLoading ||
                     state is AppointmentActionLoading) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                return TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildRequestsTab(context),
-                    _buildUpcomingTab(context),
-                    _buildHistoryTab(context),
-                  ],
-                );
+                // Show content if we have data (either current or cached)
+                if (state is DoctorAppointmentsLoaded || 
+                    state is AppointmentRequestsLoaded ||
+                    _cachedAppointmentsState != null ||
+                    _cachedRequestsState != null) {
+                  return TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildRequestsTab(context),
+                      _buildUpcomingTab(context),
+                      _buildHistoryTab(context),
+                    ],
+                  );
+                }
+                
+                // Default loading for initial state
+                return const Center(child: CircularProgressIndicator());
               },
             ),
           ),
@@ -142,20 +201,36 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
 
   Widget _buildRequestsTab(BuildContext context) {
     return BlocBuilder<DoctorAppointmentBloc, DoctorAppointmentState>(
+      buildWhen: (previous, current) {
+        return current is AppointmentRequestsLoading ||
+            current is AppointmentRequestsLoaded ||
+            current is DoctorAppointmentError;
+      },
       builder: (context, state) {
-        // Load requests if not already loaded
-        if (state is! AppointmentRequestsLoaded) {
+        // Cache state when loaded
+        if (state is AppointmentRequestsLoaded) {
+          _cachedRequestsState = state;
+        }
+        
+        // Load requests if not already loaded and no cache
+        if (state is! AppointmentRequestsLoaded && _cachedRequestsState == null) {
           context.read<DoctorAppointmentBloc>().add(
                 const LoadAppointmentRequests(),
               );
           return const Center(child: CircularProgressIndicator());
         }
+        
+        // Use current state or cached state
+        final requestsState = state is AppointmentRequestsLoaded ? state : _cachedRequestsState;
+        if (requestsState == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-        final requests = state.requests.where((r) => r.isPending).toList();
+        final requests = requestsState.requests.where((r) => r.isPending).toList();
 
         if (requests.isEmpty) {
           return _buildEmptyState(
-            icon: Icons.inbox,
+            lottieAsset: AppAssets.waitingAppointmentLottie,
             title: 'No pending requests',
             subtitle: 'New appointment requests will appear here',
           );
@@ -183,18 +258,36 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
 
   Widget _buildUpcomingTab(BuildContext context) {
     return BlocBuilder<DoctorAppointmentBloc, DoctorAppointmentState>(
+      buildWhen: (previous, current) {
+        return current is DoctorAppointmentsLoading ||
+            current is DoctorAppointmentsLoaded ||
+            current is DoctorAppointmentError;
+      },
       builder: (context, state) {
-        if (state is! DoctorAppointmentsLoaded) {
+        // Cache state when loaded
+        if (state is DoctorAppointmentsLoaded) {
+          _cachedAppointmentsState = state;
+        }
+        
+        // Load appointments if not already loaded and no cache
+        if (state is! DoctorAppointmentsLoaded && _cachedAppointmentsState == null) {
+          context.read<DoctorAppointmentBloc>().add(const LoadDoctorAppointments());
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        // Use current state or cached state
+        final appointmentsState = state is DoctorAppointmentsLoaded ? state : _cachedAppointmentsState;
+        if (appointmentsState == null) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final upcoming = state.upcomingAppointments
+        final upcoming = appointmentsState.upcomingAppointments
             .where((a) => a.isConfirmed)
             .toList();
 
         if (upcoming.isEmpty) {
           return _buildEmptyState(
-            icon: Icons.calendar_today,
+            lottieAsset: AppAssets.consultationLottie,
             title: 'No upcoming appointments',
             subtitle: 'Confirmed appointments will appear here',
           );
@@ -207,12 +300,36 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
             itemCount: upcoming.length,
             itemBuilder: (context, index) {
               final appointment = upcoming[index];
+              final hasRescheduleRequest = appointment.rescheduleRequest != null &&
+                  appointment.rescheduleRequest!.isPending;
+              
               return Padding(
                 padding: EdgeInsets.only(bottom: 12.h),
                 child: AppointmentCard(
                   appointment: appointment,
                   isPatientView: false,
                   onComplete: () => _showCompleteDialog(context, appointment),
+                  onReschedule: hasRescheduleRequest 
+                      ? null 
+                      : () => _showDoctorRescheduleDialog(context, appointment),
+                  onCancel: hasRescheduleRequest 
+                      ? null 
+                      : () => _showDoctorCancelDialog(context, appointment),
+                  onApproveReschedule: hasRescheduleRequest
+                      ? () => _approveReschedule(context, appointment)
+                      : null,
+                  onRejectReschedule: hasRescheduleRequest
+                      ? () => _showRejectRescheduleDialog(context, appointment)
+                      : null,
+                  onCreatePrescription: () => context.pushPage(
+                    CreatePrescriptionScreen(
+                      consultationId: appointment.id,
+                      patientId: appointment.patientId,
+                      doctorId: appointment.doctorId,
+                      patientName: appointment.patientInfo?.fullName ?? 'Patient',
+                    ),
+                    transition: NavTransition.slideUp,
+                  ),
                 ),
               );
             },
@@ -224,18 +341,36 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
 
   Widget _buildHistoryTab(BuildContext context) {
     return BlocBuilder<DoctorAppointmentBloc, DoctorAppointmentState>(
+      buildWhen: (previous, current) {
+        return current is DoctorAppointmentsLoading ||
+            current is DoctorAppointmentsLoaded ||
+            current is DoctorAppointmentError;
+      },
       builder: (context, state) {
-        if (state is! DoctorAppointmentsLoaded) {
+        // Cache state when loaded
+        if (state is DoctorAppointmentsLoaded) {
+          _cachedAppointmentsState = state;
+        }
+        
+        // Load appointments if not already loaded and no cache
+        if (state is! DoctorAppointmentsLoaded && _cachedAppointmentsState == null) {
+          context.read<DoctorAppointmentBloc>().add(const LoadDoctorAppointments());
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        // Use current state or cached state
+        final appointmentsState = state is DoctorAppointmentsLoaded ? state : _cachedAppointmentsState;
+        if (appointmentsState == null) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final history = state.appointments
+        final history = appointmentsState.appointments
             .where((a) => a.isFinal)
             .toList();
 
         if (history.isEmpty) {
           return _buildEmptyState(
-            icon: Icons.history,
+            lottieAsset: AppAssets.prescriptionLottie,
             title: 'No appointment history',
             subtitle: 'Completed appointments will appear here',
           );
@@ -253,6 +388,17 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
                 child: AppointmentCard(
                   appointment: appointment,
                   isPatientView: false,
+                  onCreatePrescription: appointment.status == AppointmentStatus.completed
+                      ? () => context.pushPage(
+                            CreatePrescriptionScreen(
+                              consultationId: appointment.id,
+                              patientId: appointment.patientId,
+                              doctorId: appointment.doctorId,
+                              patientName: appointment.patientInfo?.fullName ?? 'Patient',
+                            ),
+                            transition: NavTransition.slideUp,
+                          )
+                      : null,
                 ),
               );
             },
@@ -263,24 +409,32 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
   }
 
   Widget _buildEmptyState({
-    required IconData icon,
+    required String lottieAsset,
     required String title,
     required String subtitle,
   }) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 64.sp, color: AppColors.grey300),
-          SizedBox(height: 16.h),
-          AppTitle(text: title, fontSize: 18.sp),
-          SizedBox(height: 8.h),
-          AppSubtitle(
-            text: subtitle,
-            fontSize: 14.sp,
-            textAlign: TextAlign.center,
-          ),
-        ],
+      child: Padding(
+        padding: EdgeInsets.all(24.r),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              lottieAsset,
+              width: 180.w,
+              height: 180.h,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(height: 24.h),
+            AppTitle(text: title, fontSize: 18.sp),
+            SizedBox(height: 8.h),
+            AppSubtitle(
+              text: subtitle,
+              fontSize: 14.sp,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -381,6 +535,123 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.success),
             child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDoctorRescheduleDialog(BuildContext context, AppointmentEntity appointment) {
+    DoctorRescheduleDialog.show(context, appointment: appointment);
+  }
+
+  void _showDoctorCancelDialog(BuildContext context, AppointmentEntity appointment) {
+    final reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel Appointment'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.person_outline, color: AppColors.grey500, size: 18.sp),
+                SizedBox(width: 8.w),
+                AppBodyText(
+                  text: appointment.patientInfo?.fullName ?? 'Patient',
+                  fontWeight: FontWeight.w600,
+                ),
+              ],
+            ),
+            SizedBox(height: 16.h),
+            const Text('Are you sure you want to cancel this appointment?'),
+            SizedBox(height: 16.h),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason for cancellation',
+                hintText: 'Please provide a reason',
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('No, Keep It'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) {
+                AppSnackBar.warning(context, 'Please provide a reason');
+                return;
+              }
+              Navigator.pop(dialogContext);
+              context.read<DoctorAppointmentBloc>().add(
+                    CancelByDoctor(
+                      appointmentId: appointment.id,
+                      reason: reasonController.text.trim(),
+                    ),
+                  );
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _approveReschedule(BuildContext context, AppointmentEntity appointment) {
+    context.read<DoctorAppointmentBloc>().add(
+          ApprovePatientReschedule(appointmentId: appointment.id),
+        );
+  }
+
+  void _showRejectRescheduleDialog(BuildContext context, AppointmentEntity appointment) {
+    final reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Decline Reschedule Request'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Are you sure you want to decline this reschedule request?'),
+            SizedBox(height: 16.h),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason (optional)',
+                hintText: 'Provide a reason for declining',
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<DoctorAppointmentBloc>().add(
+                    RejectPatientReschedule(
+                      appointmentId: appointment.id,
+                      reason: reasonController.text.trim().isEmpty
+                          ? null
+                          : reasonController.text.trim(),
+                    ),
+                  );
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Decline'),
           ),
         ],
       ),

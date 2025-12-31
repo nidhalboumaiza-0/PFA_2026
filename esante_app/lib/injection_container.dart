@@ -30,6 +30,7 @@ import 'features/profile/domain/usecases/check_profile_completion_usecase.dart';
 import 'features/profile/domain/usecases/get_doctor_profile_usecase.dart';
 import 'features/profile/domain/usecases/update_doctor_profile_usecase.dart';
 import 'features/profile/presentation/blocs/patient_profile/profile_bloc.dart';
+import 'features/profile/presentation/blocs/patient_profile/patient_profile_bloc.dart';
 import 'features/profile/presentation/blocs/doctor_profile/doctor_profile_bloc.dart';
 
 // Doctors Feature
@@ -62,6 +63,15 @@ import 'features/appointments/domain/usecases/doctor/reschedule_appointment_usec
 import 'features/appointments/domain/usecases/doctor/get_appointment_statistics_usecase.dart';
 import 'features/appointments/presentation/bloc/patient/patient_appointment_bloc.dart';
 import 'features/appointments/presentation/bloc/doctor/doctor_appointment_bloc.dart';
+
+// Prescriptions Feature
+import 'features/prescriptions/data/datasources/prescription_remote_data_source.dart';
+import 'features/prescriptions/data/repositories/prescription_repository_impl.dart';
+import 'features/prescriptions/domain/repositories/prescription_repository.dart';
+import 'features/prescriptions/domain/usecases/create_prescription.dart';
+import 'features/prescriptions/domain/usecases/get_my_prescriptions.dart';
+import 'features/prescriptions/domain/usecases/get_prescription_by_id.dart';
+import 'features/prescriptions/presentation/bloc/prescription_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -165,8 +175,15 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton(() => GetDoctorProfileUseCase(sl()));
   sl.registerLazySingleton(() => UpdateDoctorProfileUseCase(sl()));
 
-  // Patient Profile Bloc
+  // Patient Profile Bloc (original)
   sl.registerFactory(() => ProfileBloc(
+        getPatientProfileUseCase: sl(),
+        updatePatientProfileUseCase: sl(),
+        uploadProfilePhotoUseCase: sl(),
+      ));
+
+  // Patient Profile Bloc (used in dashboard)
+  sl.registerFactory(() => PatientProfileBloc(
         getPatientProfileUseCase: sl(),
         updatePatientProfileUseCase: sl(),
         uploadProfilePhotoUseCase: sl(),
@@ -273,6 +290,31 @@ Future<void> initializeDependencies() async {
     getAppointmentStatisticsUseCase: sl(),
     repository: sl(), // For approve/reject reschedule operations
     webSocketService: sl(),
+  ));
+
+  // ============== Prescriptions Feature ==============
+  print('[DI] Registering Prescriptions dependencies...');
+
+  // Data Sources
+  sl.registerLazySingleton<PrescriptionRemoteDataSource>(
+    () => PrescriptionRemoteDataSourceImpl(apiClient: sl()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<PrescriptionRepository>(
+    () => PrescriptionRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Use Cases
+  sl.registerLazySingleton(() => GetMyPrescriptionsUseCase(sl()));
+  sl.registerLazySingleton(() => GetPrescriptionByIdUseCase(sl()));
+  sl.registerLazySingleton(() => CreatePrescriptionUseCase(sl()));
+
+  // Bloc (Factory - new instance per screen)
+  sl.registerFactory(() => PrescriptionBloc(
+    getMyPrescriptionsUseCase: sl(),
+    getPrescriptionByIdUseCase: sl(),
+    createPrescriptionUseCase: sl(),
   ));
   
   print('[DI] All dependencies initialized successfully');

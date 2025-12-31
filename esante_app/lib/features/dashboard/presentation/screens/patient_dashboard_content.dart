@@ -7,6 +7,7 @@ import '../../../../injection_container.dart';
 import '../../../profile/domain/entities/patient_profile_entity.dart';
 import '../../../profile/domain/usecases/check_profile_completion_usecase.dart';
 import '../../../profile/presentation/blocs/patient_profile/patient_profile_bloc.dart';
+import '../../../prescriptions/presentation/screens/my_prescriptions_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 
 /// Dashboard content for patient users (without bottom navigation)
@@ -264,12 +265,13 @@ class _PatientDashboardContentState extends State<PatientDashboardContent> {
         onTap: () => widget.onNavigateToTab?.call(2),
       ),
       _QuickAction(
-        icon: Icons.message_rounded,
-        label: 'Messages',
-        color: AppColors.info,
-        onTap: () {
-          // TODO: Navigate to messages
-        },
+        icon: Icons.receipt_long_rounded,
+        label: 'Prescriptions',
+        color: AppColors.error,
+        onTap: () => context.pushPage(
+          const MyPrescriptionsScreen(),
+          transition: NavTransition.slideUp,
+        ),
       ),
       _QuickAction(
         icon: Icons.settings_rounded,

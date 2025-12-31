@@ -1,7 +1,7 @@
 import MedicalDocument from '../models/MedicalDocument.js';
 import Consultation from '../models/Consultation.js';
 import Prescription from '../models/Prescription.js';
-import { kafkaProducer, TOPICS, createEvent } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess } from '../../../../shared/index.js';
 import {
     uploadDocumentToS3,
     getSignedUrl,
@@ -21,9 +21,8 @@ export const getDossierMedical = async (req, res, next) => {
 
         // Verify access
         if (role === 'patient' && userId.toString() !== patientId.toString()) {
-            return res.status(403).json({
-                message: 'You can only view your own medical dossier'
-            });
+            return sendError(res, 403, 'FORBIDDEN',
+                'You can only view your own medical dossier.');
         }
 
         // Fetch all components of the dossier
@@ -76,15 +75,13 @@ export const addFileToDossier = async (req, res, next) => {
 
         // Verify access
         if (role === 'patient' && userId.toString() !== patientId.toString()) {
-            return res.status(403).json({
-                message: 'You can only add files to your own dossier'
-            });
+            return sendError(res, 403, 'FORBIDDEN',
+                'You can only add files to your own dossier.');
         }
 
         if (!req.file) {
-            return res.status(400).json({
-                message: 'No file provided'
-            });
+            return sendError(res, 400, 'NO_FILE',
+                'No file provided. Please select a file to upload.');
         }
 
         validateFile(req.file);
@@ -171,15 +168,13 @@ export const addFilesToDossier = async (req, res, next) => {
 
         // Verify access
         if (role === 'patient' && userId.toString() !== patientId.toString()) {
-            return res.status(403).json({
-                message: 'You can only add files to your own dossier'
-            });
+            return sendError(res, 403, 'FORBIDDEN',
+                'You can only add files to your own dossier.');
         }
 
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({
-                message: 'No files provided'
-            });
+            return sendError(res, 400, 'NO_FILES',
+                'No files provided. Please select files to upload.');
         }
 
         const uploadedDocuments = [];
@@ -265,16 +260,14 @@ export const deleteFile = async (req, res, next) => {
         const document = await MedicalDocument.findById(fileId);
 
         if (!document) {
-            return res.status(404).json({
-                message: 'Document not found'
-            });
+            return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+                'The document you are looking for does not exist.');
         }
 
         // Verify ownership
         if (role === 'patient' && document.patientId.toString() !== userId.toString()) {
-            return res.status(403).json({
-                message: 'You can only delete files from your own dossier'
-            });
+            return sendError(res, 403, 'FORBIDDEN',
+                'You can only delete files from your own dossier.');
         }
 
         // Soft delete
@@ -302,16 +295,14 @@ export const updateFileDescription = async (req, res, next) => {
         const document = await MedicalDocument.findById(fileId);
 
         if (!document) {
-            return res.status(404).json({
-                message: 'Document not found'
-            });
+            return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+                'The document you are looking for does not exist.');
         }
 
         // Verify ownership
         if (role === 'patient' && document.patientId.toString() !== userId.toString()) {
-            return res.status(403).json({
-                message: 'You can only update files in your own dossier'
-            });
+            return sendError(res, 403, 'FORBIDDEN',
+                'You can only update files in your own dossier.');
         }
 
         document.description = description;
