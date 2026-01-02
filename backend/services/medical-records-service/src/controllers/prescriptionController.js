@@ -21,7 +21,7 @@ import { getDoctorBasicInfo, getPatientBasicInfo, calculatePagination } from '..
  */
 export const createPrescription = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const {
       consultationId,
       medications,
@@ -111,7 +111,7 @@ export const createPrescription = async (req, res, next) => {
  */
 export const getPrescriptionById = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { prescriptionId } = req.params;
 
     const prescription = await Prescription.findById(prescriptionId)
@@ -209,7 +209,7 @@ export const getPrescriptionById = async (req, res, next) => {
  */
 export const updatePrescription = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { prescriptionId } = req.params;
     const updates = req.body;
 
@@ -317,7 +317,7 @@ export const updatePrescription = async (req, res, next) => {
  */
 export const lockPrescription = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { prescriptionId } = req.params;
 
     const prescription = await Prescription.findById(prescriptionId);
@@ -370,7 +370,7 @@ export const lockPrescription = async (req, res, next) => {
  */
 export const getPrescriptionHistory = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { prescriptionId } = req.params;
 
     const prescription = await Prescription.findById(prescriptionId);
@@ -410,7 +410,7 @@ export const getPrescriptionHistory = async (req, res, next) => {
  */
 export const getPatientPrescriptions = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { patientId } = req.params;
     const { startDate, endDate, status, page, limit } = req.query;
 
@@ -457,7 +457,7 @@ export const getPatientPrescriptions = async (req, res, next) => {
  */
 export const getActivePrescriptions = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { patientId } = req.params;
 
     // Get active prescriptions from last 3 months
@@ -500,7 +500,7 @@ export const getActivePrescriptions = async (req, res, next) => {
  */
 export const getMyPrescriptions = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const { status, page, limit } = req.query;
 
     // Build query

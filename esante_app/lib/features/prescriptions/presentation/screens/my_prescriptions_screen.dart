@@ -32,6 +32,14 @@ class MyPrescriptionsScreen extends StatelessWidget {
             }
 
             if (state is PrescriptionError) {
+              // Show beautiful no-connection widget for network errors
+              if (state.isNetworkError) {
+                return NoConnectionWidget(
+                  onRetry: () => context.read<PrescriptionBloc>().add(
+                        const LoadMyPrescriptions(),
+                      ),
+                );
+              }
               return _ErrorView(
                 message: state.message,
                 onRetry: () => context.read<PrescriptionBloc>().add(

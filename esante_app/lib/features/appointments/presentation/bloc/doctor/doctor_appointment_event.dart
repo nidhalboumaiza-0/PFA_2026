@@ -225,3 +225,35 @@ class OnNewAppointmentRequest extends DoctorAppointmentEvent {
   @override
   List<Object?> get props => [data];
 }
+
+/// Event to book a referral appointment for a patient with a specialist
+class BookReferralAppointment extends DoctorAppointmentEvent {
+  final String patientId;
+  final String specialistDoctorId;
+  final DateTime appointmentDate;
+  final String appointmentTime;
+  final String reason;
+  final String? referralId;
+  final String? notes;
+
+  const BookReferralAppointment({
+    required this.patientId,
+    required this.specialistDoctorId,
+    required this.appointmentDate,
+    required this.appointmentTime,
+    required this.reason,
+    this.referralId,
+    this.notes,
+  });
+
+  @override
+  List<Object?> get props => [
+        patientId,
+        specialistDoctorId,
+        appointmentDate,
+        appointmentTime,
+        reason,
+        referralId,
+        notes,
+      ];
+}

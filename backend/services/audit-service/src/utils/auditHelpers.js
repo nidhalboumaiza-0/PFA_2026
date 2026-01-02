@@ -182,7 +182,7 @@ export const auditMiddleware = (req, res, next) => {
       createAuditLog({
         action: req.auditAction.action,
         actionCategory: req.auditAction.category,
-        performedBy: req.user.userId,
+        performedBy: req.user.profileId,
         performedByType: req.user.role,
         resourceType: req.auditAction.resourceType,
         resourceId: req.auditAction.resourceId,

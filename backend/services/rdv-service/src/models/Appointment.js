@@ -98,6 +98,32 @@ const appointmentSchema = new mongoose.Schema({
     default: 0
   },
 
+  // Patient-uploaded medical documents (previous records, history, etc.)
+  attachedDocuments: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    url: {
+      type: String,
+      required: true
+    },
+    type: {
+      type: String,
+      enum: ['medical_record', 'lab_result', 'prescription', 'imaging', 'referral_letter', 'other'],
+      default: 'other'
+    },
+    description: {
+      type: String,
+      trim: true
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
   // Pending reschedule request (from patient)
   rescheduleRequest: {
     requestedDate: Date,

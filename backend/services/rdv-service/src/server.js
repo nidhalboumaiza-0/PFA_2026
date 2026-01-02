@@ -12,6 +12,7 @@ import {
   getMongoUri
 } from '../../../shared/index.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
 
 const app = express();
 const SERVICE_NAME = 'rdv-service';
@@ -38,6 +39,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/v1/appointments', appointmentRoutes);
+app.use('/api/v1/reviews', reviewRoutes);
 
 // 404 handler
 app.use((req, res) => {

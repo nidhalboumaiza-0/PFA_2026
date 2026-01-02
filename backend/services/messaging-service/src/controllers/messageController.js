@@ -23,7 +23,7 @@ import {
  */
 export const createOrGetConversation = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const currentUserRole = req.user.role;
     const { recipientId, recipientType } = req.body;
 
@@ -119,7 +119,7 @@ export const createOrGetConversation = async (req, res) => {
  */
 export const getUserConversations = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const { type, page, limit } = req.query;
 
     // Build query
@@ -175,7 +175,7 @@ export const getUserConversations = async (req, res) => {
  */
 export const getConversationMessages = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const { conversationId } = req.params;
     const { page, limit, before } = req.query;
 
@@ -285,7 +285,7 @@ export const getConversationMessages = async (req, res) => {
  */
 export const markMessagesAsRead = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const { conversationId } = req.params;
     const { messageIds } = req.body;
 
@@ -351,7 +351,7 @@ export const markMessagesAsRead = async (req, res) => {
  */
 export const sendFileMessage = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const currentUserRole = req.user.role;
     const { conversationId } = req.params;
     const { receiverId, messageType, caption } = req.body;
@@ -456,7 +456,7 @@ export const sendFileMessage = async (req, res) => {
  */
 export const deleteMessage = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const { messageId } = req.params;
 
     // Find message
@@ -508,7 +508,7 @@ export const deleteMessage = async (req, res) => {
  */
 export const getUnreadCount = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
 
     // Calculate unread count
     const { totalUnread, byConversation } = await calculateUnreadCount(currentUserId);
@@ -545,7 +545,7 @@ export const getUnreadCount = async (req, res) => {
  */
 export const searchMessages = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.profileId;
     const { query, conversationId, page, limit } = req.query;
 
     // Build search query

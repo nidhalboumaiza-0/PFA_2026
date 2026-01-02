@@ -1,8 +1,10 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_list.dart';
+import '../../domain/entities/document_entity.dart';
 import '../../domain/repositories/appointment_repository.dart';
 import '../../presentation/bloc/doctor/doctor_appointment_bloc.dart';
 import '../models/appointment_model.dart';
+import '../models/document_model.dart';
 import '../models/time_slot_model.dart';
 
 abstract class AppointmentRemoteDataSource {
@@ -94,8 +96,37 @@ abstract class AppointmentRemoteDataSource {
 
   Future<AppointmentStatistics> getAppointmentStatistics();
 
+  /// Book a referral appointment for a patient with a specialist doctor
+  Future<AppointmentModel> referralBooking({
+    required String patientId,
+    required String specialistDoctorId,
+    required DateTime appointmentDate,
+    required String appointmentTime,
+    required String reason,
+    String? referralId,
+    String? notes,
+  });
+
   // Shared
   Future<AppointmentModel> getAppointmentDetails({required String appointmentId});
+
+  // Document operations
+  Future<List<AppointmentDocumentModel>> getAppointmentDocuments({
+    required String appointmentId,
+  });
+
+  Future<AppointmentDocumentModel> addDocumentToAppointment({
+    required String appointmentId,
+    required String name,
+    required String url,
+    required DocumentType type,
+    String? description,
+  });
+
+  Future<void> removeDocumentFromAppointment({
+    required String appointmentId,
+    required String documentId,
+  });
 }
 
 class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
@@ -309,7 +340,7 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
       queryParameters: {'page': page, 'limit': limit},
     );
 
-    return (response['requests'] as List<dynamic>?)
+    return (response['appointments'] as List<dynamic>?)
             ?.map((a) => AppointmentModel.fromJson(a as Map<String, dynamic>))
             .toList() ??
         [];
@@ -456,6 +487,34 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
     );
   }
 
+  @override
+  Future<AppointmentModel> referralBooking({
+    required String patientId,
+    required String specialistDoctorId,
+    required DateTime appointmentDate,
+    required String appointmentTime,
+    required String reason,
+    String? referralId,
+    String? notes,
+  }) async {
+    _log('referralBooking', 'Booking referral for patient $patientId with doctor $specialistDoctorId');
+
+    final response = await _apiClient.post(
+      ApiList.doctorReferralBooking,
+      data: {
+        'patientId': patientId,
+        'doctorId': specialistDoctorId,
+        'appointmentDate': appointmentDate.toIso8601String(),
+        'appointmentTime': appointmentTime,
+        'reason': reason,
+        if (referralId != null) 'referralId': referralId,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      },
+    );
+
+    return AppointmentModel.fromJson(response['appointment']);
+  }
+
   // ============== Shared Operations ==============
 
   @override
@@ -467,5 +526,57 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
     final response = await _apiClient.get(ApiList.appointmentDetails(appointmentId));
 
     return AppointmentModel.fromJson(response['appointment']);
+  }
+
+  // ============== Document Operations ==============
+
+  @override
+  Future<List<AppointmentDocumentModel>> getAppointmentDocuments({
+    required String appointmentId,
+  }) async {
+    _log('getAppointmentDocuments', 'Getting documents for: $appointmentId');
+
+    final response = await _apiClient.get(
+      ApiList.appointmentDocuments(appointmentId),
+    );
+
+    final documentsResponse = AppointmentDocumentsResponse.fromJson(response);
+    return documentsResponse.documents;
+  }
+
+  @override
+  Future<AppointmentDocumentModel> addDocumentToAppointment({
+    required String appointmentId,
+    required String name,
+    required String url,
+    required DocumentType type,
+    String? description,
+  }) async {
+    _log('addDocumentToAppointment', 'Adding document "$name" to: $appointmentId');
+
+    final response = await _apiClient.post(
+      ApiList.appointmentDocuments(appointmentId),
+      data: {
+        'name': name,
+        'url': url,
+        'type': type.value,
+        if (description != null && description.isNotEmpty) 'description': description,
+      },
+    );
+
+    final addResponse = AddDocumentResponse.fromJson(response);
+    return addResponse.document;
+  }
+
+  @override
+  Future<void> removeDocumentFromAppointment({
+    required String appointmentId,
+    required String documentId,
+  }) async {
+    _log('removeDocumentFromAppointment', 'Removing document $documentId from: $appointmentId');
+
+    await _apiClient.delete(
+      ApiList.appointmentDocumentDelete(appointmentId, documentId),
+    );
   }
 }

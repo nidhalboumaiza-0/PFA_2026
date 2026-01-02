@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
+import '../../../messaging/presentation/screens/conversations_screen.dart';
 import '../../../profile/presentation/blocs/doctor_profile/doctor_profile_bloc.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 
@@ -57,6 +58,23 @@ class _DoctorDashboardContentState extends State<DoctorDashboardContent> {
               centerTitle: true,
             ),
             actions: [
+              IconButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ConversationsScreen(),
+                    ),
+                  );
+                },
+                icon: Badge(
+                  smallSize: 8.r,
+                  child: Icon(
+                    Icons.chat_bubble_outline,
+                    size: 24.sp,
+                  ),
+                ),
+                tooltip: 'Messages',
+              ),
               IconButton(
                 onPressed: () {
                   // TODO: Navigate to notifications

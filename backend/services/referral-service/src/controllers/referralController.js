@@ -25,7 +25,7 @@ import {
  */
 export const createReferral = async (req, res, next) => {
   try {
-    const { id: referringDoctorId } = req.user;
+    const { profileId: referringDoctorId } = req.user;
     const {
       patientId,
       targetDoctorId,
@@ -155,7 +155,7 @@ export const createReferral = async (req, res, next) => {
  */
 export const getReferralById = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { referralId } = req.params;
 
     const referral = await Referral.findById(referralId);
@@ -327,7 +327,7 @@ export const searchSpecialistsForReferral = async (req, res, next) => {
  */
 export const bookAppointmentForReferral = async (req, res, next) => {
   try {
-    const { id: referringDoctorId } = req.user;
+    const { profileId: referringDoctorId } = req.user;
     const { referralId } = req.params;
     const { appointmentDate, appointmentTime, notes } = req.body;
 
@@ -435,7 +435,7 @@ export const bookAppointmentForReferral = async (req, res, next) => {
  */
 export const getReceivedReferrals = async (req, res, next) => {
   try {
-    const { id: targetDoctorId } = req.user;
+    const { profileId: targetDoctorId } = req.user;
     const { status, urgency, startDate, endDate, page, limit } = req.query;
 
     // Build query
@@ -516,7 +516,7 @@ export const getReceivedReferrals = async (req, res, next) => {
  */
 export const getSentReferrals = async (req, res, next) => {
   try {
-    const { id: referringDoctorId } = req.user;
+    const { profileId: referringDoctorId } = req.user;
     const { status, patientId, specialty, page, limit } = req.query;
 
     // Build query
@@ -590,7 +590,7 @@ export const getSentReferrals = async (req, res, next) => {
  */
 export const acceptReferral = async (req, res, next) => {
   try {
-    const { id: targetDoctorId } = req.user;
+    const { profileId: targetDoctorId } = req.user;
     const { referralId } = req.params;
     const { responseNotes } = req.body;
 
@@ -644,7 +644,7 @@ export const acceptReferral = async (req, res, next) => {
  */
 export const rejectReferral = async (req, res, next) => {
   try {
-    const { id: targetDoctorId } = req.user;
+    const { profileId: targetDoctorId } = req.user;
     const { referralId } = req.params;
     const { responseNotes, suggestedDoctors } = req.body;
 
@@ -722,7 +722,7 @@ export const rejectReferral = async (req, res, next) => {
  */
 export const completeReferral = async (req, res, next) => {
   try {
-    const { id: targetDoctorId } = req.user;
+    const { profileId: targetDoctorId } = req.user;
     const { referralId } = req.params;
     const { feedback, consultationCreated } = req.body;
 
@@ -779,7 +779,7 @@ export const completeReferral = async (req, res, next) => {
  */
 export const cancelReferral = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { referralId } = req.params;
     const { cancellationReason } = req.body;
 
@@ -837,7 +837,7 @@ export const cancelReferral = async (req, res, next) => {
  */
 export const getMyReferrals = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
 
     const referrals = await Referral.find({ patientId })
       .sort({ referralDate: -1 });
@@ -887,7 +887,7 @@ export const getMyReferrals = async (req, res, next) => {
  */
 export const getReferralStatistics = async (req, res, next) => {
   try {
-    const { id: doctorId, role } = req.user;
+    const { profileId: doctorId, role } = req.user;
 
     if (role !== 'doctor') {
       return sendError(res, 403, 'FORBIDDEN',

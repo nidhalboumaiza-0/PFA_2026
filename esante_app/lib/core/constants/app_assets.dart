@@ -122,6 +122,9 @@ class AppAssets {
   
   /// Waiting for appointment animation - booking queue or waiting state
   static const String waitingAppointmentLottie = '$_healthLottie/someone waiting to take rendez vous.json';
+  
+  /// Loading health animation - generic loading state for health-related screens
+  static const String loadingHealthLottie = '$_healthLottie/Doctor.json';
 
   // ============================================================================
   // HEALTH STORYSET IMAGES (assets/doctor & health/storyset/)

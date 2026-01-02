@@ -19,7 +19,10 @@ import {
   rescheduleAppointment,
   requestReschedule,
   approveReschedule,
-  rejectReschedule
+  rejectReschedule,
+  addDocumentToAppointment,
+  removeDocumentFromAppointment,
+  getAppointmentDocuments
 } from '../controllers/appointmentController.js';
 import { auth, authorize } from '../../../../shared/index.js';
 import {
@@ -210,6 +213,33 @@ router.get(
   '/:appointmentId',
   auth,
   getAppointmentDetails
+);
+
+// ============================
+// DOCUMENT ROUTES
+// ============================
+
+// Get appointment documents (both patient & doctor)
+router.get(
+  '/:appointmentId/documents',
+  auth,
+  getAppointmentDocuments
+);
+
+// Patient: Add document to appointment
+router.post(
+  '/:appointmentId/documents',
+  auth,
+  authorize('patient'),
+  addDocumentToAppointment
+);
+
+// Patient: Remove document from appointment
+router.delete(
+  '/:appointmentId/documents/:documentId',
+  auth,
+  authorize('patient'),
+  removeDocumentFromAppointment
 );
 
 export default router;

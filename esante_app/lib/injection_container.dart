@@ -6,6 +6,8 @@ import 'core/network/api_client.dart';
 import 'core/network/auth_interceptor.dart';
 import 'core/storage/hive_storage_service.dart';
 import 'core/services/websocket_service.dart';
+import 'core/services/connectivity_service.dart';
+import 'core/services/messaging_socket_service.dart';
 
 // Auth Feature
 import 'features/auth/data/datasources/auth_remote_datasource.dart';
@@ -35,10 +37,16 @@ import 'features/profile/presentation/blocs/doctor_profile/doctor_profile_bloc.d
 
 // Doctors Feature
 import 'features/doctors/data/datasources/doctor_remote_datasource.dart';
+import 'features/doctors/data/datasources/review_remote_datasource.dart';
 import 'features/doctors/data/repositories/doctor_repository_impl.dart';
+import 'features/doctors/data/repositories/review_repository_impl.dart';
 import 'features/doctors/domain/repositories/doctor_repository.dart';
+import 'features/doctors/domain/repositories/review_repository.dart';
 import 'features/doctors/domain/usecases/search_doctors_usecase.dart';
 import 'features/doctors/domain/usecases/get_doctor_by_id_usecase.dart';
+import 'features/doctors/domain/usecases/submit_review_usecase.dart';
+import 'features/doctors/domain/usecases/get_doctor_reviews_usecase.dart';
+import 'features/doctors/domain/usecases/get_appointment_review_usecase.dart';
 import 'features/doctors/presentation/bloc/doctor_search/doctor_search_bloc.dart';
 
 // Appointments Feature
@@ -61,6 +69,8 @@ import 'features/appointments/domain/usecases/doctor/reject_appointment_usecase.
 import 'features/appointments/domain/usecases/doctor/complete_appointment_usecase.dart';
 import 'features/appointments/domain/usecases/doctor/reschedule_appointment_usecase.dart';
 import 'features/appointments/domain/usecases/doctor/get_appointment_statistics_usecase.dart';
+import 'features/appointments/domain/usecases/doctor/referral_booking_usecase.dart';
+import 'features/appointments/domain/usecases/patient/add_document_usecase.dart';
 import 'features/appointments/presentation/bloc/patient/patient_appointment_bloc.dart';
 import 'features/appointments/presentation/bloc/doctor/doctor_appointment_bloc.dart';
 
@@ -73,6 +83,18 @@ import 'features/prescriptions/domain/usecases/get_my_prescriptions.dart';
 import 'features/prescriptions/domain/usecases/get_prescription_by_id.dart';
 import 'features/prescriptions/presentation/bloc/prescription_bloc.dart';
 
+// Messaging Feature
+import 'features/messaging/data/datasources/messaging_remote_datasource.dart';
+import 'features/messaging/data/repositories/messaging_repository_impl.dart';
+import 'features/messaging/domain/repositories/messaging_repository.dart';
+import 'features/messaging/domain/usecases/get_conversations_usecase.dart';
+import 'features/messaging/domain/usecases/get_messages_usecase.dart';
+import 'features/messaging/domain/usecases/create_conversation_usecase.dart';
+import 'features/messaging/domain/usecases/mark_messages_read_usecase.dart';
+import 'features/messaging/domain/usecases/send_file_message_usecase.dart';
+import 'features/messaging/domain/usecases/get_unread_count_usecase.dart';
+import 'features/messaging/presentation/bloc/messaging_bloc.dart';
+
 final sl = GetIt.instance;
 
 Future<void> initializeDependencies() async {
@@ -81,6 +103,12 @@ Future<void> initializeDependencies() async {
   // ============== Storage ==============
   print('[DI] Initializing Hive storage...');
   await HiveStorageService.init();
+
+  // ============== Connectivity Service ==============
+  print('[DI] Initializing connectivity service...');
+  final connectivityService = ConnectivityService();
+  await connectivityService.init();
+  sl.registerLazySingleton<ConnectivityService>(() => connectivityService);
 
   // ============== External ==============
   sl.registerLazySingleton<Dio>(() {
@@ -109,6 +137,15 @@ Future<void> initializeDependencies() async {
   // ============== Core ==============
   sl.registerLazySingleton<ApiClient>(() => ApiClient(dio: sl()));
 
+  // ============== Core Services ==============
+  print('[DI] Registering Core services...');
+  
+  // WebSocket Service (Singleton) - for notifications
+  sl.registerLazySingleton<WebSocketService>(() => WebSocketService());
+  
+  // Messaging Socket Service (Singleton) - for real-time messaging
+  sl.registerLazySingleton<MessagingSocketService>(() => MessagingSocketService());
+
   // ============== Auth Feature ==============
 
   // Data Sources
@@ -125,6 +162,7 @@ Future<void> initializeDependencies() async {
       remoteDataSource: sl(),
       localDataSource: sl(),
       webSocketService: sl(),
+      messagingSocketService: sl(),
     ),
   );
 
@@ -203,26 +241,29 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton<DoctorRemoteDataSource>(
     () => DoctorRemoteDataSourceImpl(apiClient: sl()),
   );
+  sl.registerLazySingleton<ReviewRemoteDataSource>(
+    () => ReviewRemoteDataSourceImpl(apiClient: sl()),
+  );
 
   // Repository
   sl.registerLazySingleton<DoctorRepository>(
     () => DoctorRepositoryImpl(remoteDataSource: sl()),
   );
+  sl.registerLazySingleton<ReviewRepository>(
+    () => ReviewRepositoryImpl(remoteDataSource: sl()),
+  );
 
   // Use Cases
   sl.registerLazySingleton(() => SearchDoctorsUseCase(sl()));
   sl.registerLazySingleton(() => GetDoctorByIdUseCase(sl()));
+  sl.registerLazySingleton(() => SubmitReviewUseCase(sl()));
+  sl.registerLazySingleton(() => GetDoctorReviewsUseCase(sl()));
+  sl.registerLazySingleton(() => GetAppointmentReviewUseCase(sl()));
 
   // Bloc
   sl.registerFactory(() => DoctorSearchBloc(
         searchDoctorsUseCase: sl(),
       ));
-
-  // ============== Core Services ==============
-  print('[DI] Registering Core services...');
-  
-  // WebSocket Service (Singleton)
-  sl.registerLazySingleton<WebSocketService>(() => WebSocketService());
 
   // ============== Appointments Feature ==============
   print('[DI] Registering Appointments feature...');
@@ -265,6 +306,8 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton(() => CompleteAppointmentUseCase(sl()));
   sl.registerLazySingleton(() => RescheduleAppointmentUseCase(sl()));
   sl.registerLazySingleton(() => GetAppointmentStatisticsUseCase(sl()));
+  sl.registerLazySingleton(() => ReferralBookingUseCase(sl()));
+  sl.registerLazySingleton(() => AddDocumentToAppointmentUseCase(sl()));
 
   // Patient Appointment Bloc (Singleton for WebSocket real-time updates)
   sl.registerLazySingleton(() => PatientAppointmentBloc(
@@ -273,6 +316,7 @@ Future<void> initializeDependencies() async {
     requestAppointmentUseCase: sl(),
     cancelAppointmentUseCase: sl(),
     requestRescheduleUseCase: sl(),
+    addDocumentUseCase: sl(),
     webSocketService: sl(),
   ));
 
@@ -288,6 +332,7 @@ Future<void> initializeDependencies() async {
     completeAppointmentUseCase: sl(),
     rescheduleAppointmentUseCase: sl(),
     getAppointmentStatisticsUseCase: sl(),
+    referralBookingUseCase: sl(),
     repository: sl(), // For approve/reject reschedule operations
     webSocketService: sl(),
   ));
@@ -315,6 +360,38 @@ Future<void> initializeDependencies() async {
     getMyPrescriptionsUseCase: sl(),
     getPrescriptionByIdUseCase: sl(),
     createPrescriptionUseCase: sl(),
+  ));
+
+  // ============== Messaging Feature ==============
+  print('[DI] Registering Messaging dependencies...');
+
+  // Data Sources
+  sl.registerLazySingleton<MessagingRemoteDataSource>(
+    () => MessagingRemoteDataSourceImpl(sl()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<MessagingRepository>(
+    () => MessagingRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Use Cases
+  sl.registerLazySingleton(() => GetConversationsUseCase(sl()));
+  sl.registerLazySingleton(() => GetMessagesUseCase(sl()));
+  sl.registerLazySingleton(() => CreateConversationUseCase(sl()));
+  sl.registerLazySingleton(() => MarkMessagesReadUseCase(sl()));
+  sl.registerLazySingleton(() => SendFileMessageUseCase(sl()));
+  sl.registerLazySingleton(() => GetUnreadCountUseCase(sl()));
+
+  // Bloc (Factory - new instance per screen for independent state)
+  sl.registerFactory(() => MessagingBloc(
+    getConversationsUseCase: sl(),
+    getMessagesUseCase: sl(),
+    createConversationUseCase: sl(),
+    markMessagesReadUseCase: sl(),
+    sendFileMessageUseCase: sl(),
+    getUnreadCountUseCase: sl(),
+    messagingSocketService: sl<MessagingSocketService>(),
   ));
   
   print('[DI] All dependencies initialized successfully');

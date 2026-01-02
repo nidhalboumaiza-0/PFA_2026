@@ -74,6 +74,53 @@ const handleAppointmentConfirmed = async (event) => {
 };
 
 /**
+ * Handle appointment requested event (notify doctor of new request)
+ */
+const handleAppointmentRequested = async (event) => {
+  try {
+    const { appointmentId, patientId, doctorId, appointmentDate, appointmentTime } = event;
+
+    // Fetch patient details
+    const patient = await getPatientById(patientId);
+    const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Un patient';
+
+    // Format date
+    const date = new Date(appointmentDate);
+    const dateStr = date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    // Create notification for doctor
+    await createNotification({
+      userId: doctorId,
+      userType: 'doctor',
+      title: 'Nouvelle demande de rendez-vous',
+      body: `${patientName} souhaite prendre rendez-vous le ${dateStr} à ${appointmentTime}.`,
+      type: 'new_appointment_request',
+      relatedResource: {
+        resourceType: 'appointment',
+        resourceId: appointmentId,
+      },
+      priority: 'high',
+      actionUrl: `/appointments/${appointmentId}`,
+      actionData: {
+        appointmentId,
+        patientId,
+        appointmentDate,
+        appointmentTime,
+      },
+    });
+
+    console.log(`✅ Appointment request notification sent to doctor ${doctorId}`);
+  } catch (error) {
+    console.error('Error handling appointment requested:', error);
+  }
+};
+
+/**
  * Handle appointment rejected event
  */
 const handleAppointmentRejected = async (event) => {
@@ -664,10 +711,55 @@ const handleRescheduleRejected = async (event) => {
 };
 
 /**
+ * Handle review created event - notify doctor of new review
+ */
+const handleReviewCreated = async (event) => {
+  try {
+    const { doctorId, patientId, appointmentId, rating, hasComment, reviewId } = event;
+
+    const patient = await getPatientById(patientId);
+    const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Un patient';
+
+    // Build message based on rating
+    let ratingEmoji = '';
+    if (rating >= 4) ratingEmoji = '⭐';
+    else if (rating >= 3) ratingEmoji = '👍';
+    else ratingEmoji = '📝';
+
+    const commentText = hasComment ? ' avec un commentaire' : '';
+
+    await createNotification({
+      userId: doctorId,
+      userType: 'doctor',
+      title: 'Nouvel avis reçu',
+      body: `${ratingEmoji} ${patientName} vous a donné ${rating} étoile${rating > 1 ? 's' : ''}${commentText}.`,
+      type: 'review_received',
+      relatedResource: {
+        resourceType: 'review',
+        resourceId: reviewId,
+      },
+      priority: 'low',
+      actionUrl: `/reviews/${reviewId}`,
+      actionData: {
+        reviewId,
+        appointmentId,
+        patientId,
+        rating,
+      },
+    });
+
+    console.log(`✅ Review notification sent to doctor ${doctorId}`);
+  } catch (error) {
+    console.error('Error handling review created:', error);
+  }
+};
+
+/**
  * Route event to appropriate handler
  */
 const handleEvent = async (topic, event) => {
   const handlers = {
+    'rdv.appointment.requested': handleAppointmentRequested,
     'rdv.appointment.confirmed': handleAppointmentConfirmed,
     'rdv.appointment.rejected': handleAppointmentRejected,
     'rdv.appointment.cancelled': handleAppointmentCancelled,
@@ -675,6 +767,7 @@ const handleEvent = async (topic, event) => {
     'rdv.appointment.rescheduled': handleAppointmentRescheduled,
     'rdv.reschedule.requested': handleRescheduleRequested,
     'rdv.reschedule.rejected': handleRescheduleRejected,
+    'rdv.review.created': handleReviewCreated,
     'messaging.message.sent': handleNewMessage,
     'referral.referral.created': handleReferralReceived,
     'referral.referral.scheduled': handleReferralScheduled,
@@ -707,6 +800,7 @@ export const startNotificationConsumer = async () => {
     // Subscribe to topics
     await consumer.subscribe({
       topics: [
+        'rdv.appointment.requested',
         'rdv.appointment.confirmed',
         'rdv.appointment.rejected',
         'rdv.appointment.cancelled',
@@ -714,6 +808,7 @@ export const startNotificationConsumer = async () => {
         'rdv.appointment.rescheduled',
         'rdv.reschedule.requested',
         'rdv.reschedule.rejected',
+        'rdv.review.created',
         'messaging.message.sent',
         'referral.referral.created',
         'referral.referral.scheduled',

@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/entities/appointment_entity.dart';
+import 'document_viewer_widget.dart';
 
 class AppointmentCard extends StatelessWidget {
   final AppointmentEntity appointment;
@@ -16,6 +17,8 @@ class AppointmentCard extends StatelessWidget {
   final VoidCallback? onApproveReschedule;
   final VoidCallback? onRejectReschedule;
   final VoidCallback? onCreatePrescription;
+  final int documentCount;
+  final VoidCallback? onViewDocuments;
 
   const AppointmentCard({
     super.key,
@@ -30,6 +33,8 @@ class AppointmentCard extends StatelessWidget {
     this.onApproveReschedule,
     this.onRejectReschedule,
     this.onCreatePrescription,
+    this.documentCount = 0,
+    this.onViewDocuments,
   });
 
   @override
@@ -188,6 +193,15 @@ class AppointmentCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ],
+
+                  // Document badge
+                  if (documentCount > 0) ...[  
+                    SizedBox(height: 8.h),
+                    DocumentBadge(
+                      count: documentCount,
+                      onTap: onViewDocuments,
                     ),
                   ],
 

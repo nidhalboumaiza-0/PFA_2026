@@ -57,9 +57,13 @@ class PrescriptionCreated extends PrescriptionState {
 /// Error state
 class PrescriptionError extends PrescriptionState {
   final String message;
+  final bool isNetworkError;
 
-  const PrescriptionError({required this.message});
+  const PrescriptionError({
+    required this.message,
+    this.isNetworkError = false,
+  });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }

@@ -3,6 +3,7 @@ import TimeSlot from '../models/TimeSlot.js';
 import { kafkaProducer, TOPICS, createEvent, cacheGet, cacheSet, cacheDelete, sendError, sendSuccess, mongoose } from '../../../../shared/index.js';
 import {
   fetchDoctorProfile,
+  fetchPatientProfile,
   checkSlotAvailability,
   bookTimeSlot,
   freeTimeSlot,
@@ -263,8 +264,8 @@ export const viewDoctorAvailability = async (req, res, next) => {
  */
 export const requestAppointment = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
-    const { doctorId, appointmentDate, appointmentTime, reason } = req.body;
+    const { profileId: patientId } = req.user;
+    const { doctorId, appointmentDate, appointmentTime, reason, attachedDocuments } = req.body;
 
     // Verify doctor exists and is active
     const doctor = await fetchDoctorProfile(doctorId);
@@ -290,6 +291,19 @@ export const requestAppointment = async (req, res, next) => {
         'This time slot is no longer available. Please choose another time.');
     }
 
+    // Validate and process attached documents (if any)
+    let processedDocuments = [];
+    if (attachedDocuments && Array.isArray(attachedDocuments)) {
+      const validTypes = ['medical_record', 'lab_result', 'prescription', 'imaging', 'referral_letter', 'other'];
+      processedDocuments = attachedDocuments.map(doc => ({
+        name: doc.name,
+        url: doc.url,
+        type: validTypes.includes(doc.type) ? doc.type : 'other',
+        description: doc.description || '',
+        uploadedAt: new Date()
+      })).filter(doc => doc.name && doc.url); // Only keep docs with name and URL
+    }
+
     // Create appointment
     const appointment = await Appointment.create({
       patientId,
@@ -297,6 +311,7 @@ export const requestAppointment = async (req, res, next) => {
       appointmentDate: normalizeDateToStartOfDay(appointmentDate),
       appointmentTime,
       reason,
+      attachedDocuments: processedDocuments,
       status: 'pending'
     });
 
@@ -400,15 +415,22 @@ export const confirmAppointment = async (req, res, next) => {
 
     await appointment.save();
 
-    // Publish Kafka event
-    await kafkaProducer.sendEvent(
+    // Combine date and time for scheduledDate
+    const scheduledDateTime = new Date(appointment.appointmentDate);
+    const [hours, minutes] = appointment.appointmentTime.split(':').map(Number);
+    scheduledDateTime.setHours(hours, minutes, 0, 0);
+
+    // Publish Kafka event (fire-and-forget, don't block the response)
+    kafkaProducer.sendEvent(
       TOPICS.RDV.APPOINTMENT_CONFIRMED,
       createEvent('appointment.confirmed', {
         appointmentId: appointment._id.toString(),
         patientId: appointment.patientId.toString(),
-        doctorId: appointment.doctorId.toString()
+        doctorId: appointment.doctorId.toString(),
+        scheduledDate: scheduledDateTime.toISOString(),
+        appointmentTime: appointment.appointmentTime
       })
-    );
+    ).catch(err => console.error('Failed to publish appointment.confirmed event:', err.message));
 
     res.status(200).json({
       message: 'Appointment confirmed successfully',
@@ -464,6 +486,8 @@ export const rejectAppointment = async (req, res, next) => {
       TOPICS.RDV.APPOINTMENT_REJECTED,
       createEvent('appointment.rejected', {
         appointmentId: appointment._id.toString(),
+        patientId: appointment.patientId.toString(),
+        doctorId: appointment.doctorId.toString(),
         reason: rejectionReason
       })
     );
@@ -588,7 +612,7 @@ export const rescheduleAppointment = async (req, res, next) => {
  */
 export const requestReschedule = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const { appointmentId } = req.params;
     const { newDate, newTime, reason } = req.body;
 
@@ -819,7 +843,7 @@ export const rejectReschedule = async (req, res, next) => {
  */
 export const cancelAppointment = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const { appointmentId } = req.params;
     const { cancellationReason } = req.body;
 
@@ -859,7 +883,10 @@ export const cancelAppointment = async (req, res, next) => {
       TOPICS.RDV.APPOINTMENT_CANCELLED,
       createEvent('appointment.cancelled', {
         appointmentId: appointment._id.toString(),
-        cancelledBy: 'patient'
+        patientId: appointment.patientId.toString(),
+        doctorId: appointment.doctorId.toString(),
+        cancelledBy: 'patient',
+        reason: cancellationReason
       })
     );
 
@@ -877,7 +904,7 @@ export const cancelAppointment = async (req, res, next) => {
  */
 export const getAppointmentDetails = async (req, res, next) => {
   try {
-    const { id: userId } = req.user;
+    const { profileId, role } = req.user;
     const { appointmentId } = req.params;
 
     const appointment = await Appointment.findById(appointmentId);
@@ -887,17 +914,60 @@ export const getAppointmentDetails = async (req, res, next) => {
         'The appointment you are looking for does not exist.');
     }
 
-    // Verify user is patient or doctor of this appointment
-    const isPatient = appointment.patientId.toString() === userId.toString();
-    const isDoctor = appointment.doctorId.toString() === userId.toString();
+    // Verify user is patient or doctor of this appointment (using profileId, not auth userId)
+    const isPatient = role === 'patient' && appointment.patientId.toString() === profileId;
+    const isDoctor = role === 'doctor' && appointment.doctorId.toString() === profileId;
 
     if (!isPatient && !isDoctor) {
       return sendError(res, 403, 'FORBIDDEN',
         'You do not have access to this appointment.');
     }
 
+    // Convert to object for adding extra info
+    const appointmentData = appointment.toObject();
+
+    // Populate doctor info for patient, or patient info for doctor
+    if (isPatient) {
+      try {
+        const doctor = await fetchDoctorProfile(appointment.doctorId.toString());
+        appointmentData.doctorInfo = {
+          _id: doctor._id,
+          firstName: doctor.firstName,
+          lastName: doctor.lastName,
+          specialty: doctor.specialty,
+          profilePhoto: doctor.profilePhoto,
+          clinicName: doctor.clinicName,
+          clinicAddress: doctor.clinicAddress,
+          phone: doctor.phone,
+          consultationFee: doctor.consultationFee
+        };
+      } catch (err) {
+        console.error('Failed to fetch doctor info:', err.message);
+      }
+    } else if (isDoctor) {
+      try {
+        const patient = await fetchPatientProfile(appointment.patientId.toString());
+        if (patient) {
+          appointmentData.patientInfo = {
+            _id: patient._id,
+            firstName: patient.firstName,
+            lastName: patient.lastName,
+            phone: patient.phone,
+            gender: patient.gender,
+            dateOfBirth: patient.dateOfBirth,
+            profilePhoto: patient.profilePhoto,
+            bloodType: patient.bloodType,
+            allergies: patient.allergies,
+            chronicDiseases: patient.chronicDiseases
+          };
+        }
+      } catch (err) {
+        console.error('Failed to fetch patient info:', err.message);
+      }
+    }
+
     res.status(200).json({
-      appointment
+      appointment: appointmentData
     });
   } catch (error) {
     next(error);
@@ -910,7 +980,7 @@ export const getAppointmentDetails = async (req, res, next) => {
  */
 export const getPatientAppointments = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const {
       status = 'all',
       timeFilter = 'all',
@@ -990,6 +1060,8 @@ export const getDoctorAppointments = async (req, res, next) => {
     const { profileId: doctorId } = req.user;
     const { date, status = 'all', page = 1, limit = 20 } = req.query;
 
+    console.log(`🔍 getDoctorAppointments - doctorId from JWT profileId: ${doctorId}`);
+
     const query = { doctorId };
 
     // Filter by date
@@ -1012,11 +1084,36 @@ export const getDoctorAppointments = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Populate patient info for each appointment
+    const appointmentsWithPatientInfo = await Promise.all(
+      appointments.map(async (apt) => {
+        const aptObj = apt.toObject();
+        try {
+          const patient = await fetchPatientProfile(apt.patientId.toString());
+          if (patient) {
+            aptObj.patientInfo = {
+              _id: patient._id,
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              phone: patient.phone,
+              gender: patient.gender,
+              dateOfBirth: patient.dateOfBirth,
+              profilePhoto: patient.profilePhoto
+            };
+          }
+        } catch (err) {
+          console.error(`Failed to fetch patient for appointment ${apt._id}:`, err.message);
+          aptObj.patientInfo = null;
+        }
+        return aptObj;
+      })
+    );
+
     const totalAppointments = await Appointment.countDocuments(query);
     const totalPages = Math.ceil(totalAppointments / parseInt(limit));
 
     res.status(200).json({
-      appointments,
+      appointments: appointmentsWithPatientInfo,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -1084,7 +1181,7 @@ export const completeAppointment = async (req, res, next) => {
  */
 export const referralBooking = async (req, res, next) => {
   try {
-    const { id: referringDoctorId } = req.user;
+    const { profileId: referringDoctorId } = req.user;
     const {
       patientId,
       targetDoctorId,
@@ -1231,6 +1328,159 @@ export const checkAppointmentRelationship = async (req, res, next) => {
       hasAppointment,
       patientId,
       doctorId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Patient: Add document to appointment
+ * POST /api/v1/appointments/:appointmentId/documents
+ * 
+ * Allows patient to attach medical records, lab results, etc.
+ */
+export const addDocumentToAppointment = async (req, res, next) => {
+  try {
+    const { profileId: patientId } = req.user;
+    const { appointmentId } = req.params;
+    const { name, url, type, description } = req.body;
+
+    // Validate required fields
+    if (!name || !url) {
+      return sendError(res, 400, 'VALIDATION_ERROR',
+        'Document name and URL are required.');
+    }
+
+    // Find appointment
+    const appointment = await Appointment.findById(appointmentId);
+
+    if (!appointment) {
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'Appointment not found.');
+    }
+
+    // Verify patient owns this appointment
+    if (appointment.patientId.toString() !== patientId.toString()) {
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only add documents to your own appointments.');
+    }
+
+    // Only allow adding documents to pending or confirmed appointments
+    if (!['pending', 'confirmed'].includes(appointment.status)) {
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Documents can only be added to pending or confirmed appointments.');
+    }
+
+    // Validate document type
+    const validTypes = ['medical_record', 'lab_result', 'prescription', 'imaging', 'referral_letter', 'other'];
+    const docType = validTypes.includes(type) ? type : 'other';
+
+    // Add document
+    const newDocument = {
+      name,
+      url,
+      type: docType,
+      description: description || '',
+      uploadedAt: new Date()
+    };
+
+    appointment.attachedDocuments.push(newDocument);
+    await appointment.save();
+
+    res.status(201).json({
+      message: 'Document added successfully.',
+      document: newDocument,
+      totalDocuments: appointment.attachedDocuments.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Patient: Remove document from appointment
+ * DELETE /api/v1/appointments/:appointmentId/documents/:documentId
+ */
+export const removeDocumentFromAppointment = async (req, res, next) => {
+  try {
+    const { profileId: patientId } = req.user;
+    const { appointmentId, documentId } = req.params;
+
+    // Find appointment
+    const appointment = await Appointment.findById(appointmentId);
+
+    if (!appointment) {
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'Appointment not found.');
+    }
+
+    // Verify patient owns this appointment
+    if (appointment.patientId.toString() !== patientId.toString()) {
+      return sendError(res, 403, 'FORBIDDEN',
+        'You can only remove documents from your own appointments.');
+    }
+
+    // Only allow removing documents from pending or confirmed appointments
+    if (!['pending', 'confirmed'].includes(appointment.status)) {
+      return sendError(res, 400, 'INVALID_STATUS',
+        'Documents can only be removed from pending or confirmed appointments.');
+    }
+
+    // Find and remove document
+    const docIndex = appointment.attachedDocuments.findIndex(
+      doc => doc._id.toString() === documentId
+    );
+
+    if (docIndex === -1) {
+      return sendError(res, 404, 'DOCUMENT_NOT_FOUND',
+        'Document not found.');
+    }
+
+    appointment.attachedDocuments.splice(docIndex, 1);
+    await appointment.save();
+
+    res.status(200).json({
+      message: 'Document removed successfully.',
+      totalDocuments: appointment.attachedDocuments.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get documents for an appointment
+ * GET /api/v1/appointments/:appointmentId/documents
+ * 
+ * Both patient and doctor can view attached documents
+ */
+export const getAppointmentDocuments = async (req, res, next) => {
+  try {
+    const { profileId, role } = req.user;
+    const { appointmentId } = req.params;
+
+    // Find appointment
+    const appointment = await Appointment.findById(appointmentId);
+
+    if (!appointment) {
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND',
+        'Appointment not found.');
+    }
+
+    // Verify access (patient or doctor)
+    const isPatient = role === 'patient' && appointment.patientId.toString() === profileId.toString();
+    const isDoctor = role === 'doctor' && appointment.doctorId.toString() === profileId.toString();
+
+    if (!isPatient && !isDoctor) {
+      return sendError(res, 403, 'FORBIDDEN',
+        'You do not have access to this appointment.');
+    }
+
+    res.status(200).json({
+      appointmentId,
+      documents: appointment.attachedDocuments,
+      totalDocuments: appointment.attachedDocuments.length
     });
   } catch (error) {
     next(error);

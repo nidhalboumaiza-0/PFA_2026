@@ -17,7 +17,7 @@ import { sendError, sendSuccess } from '../../../../shared/index.js';
  */
 export const getUserNotifications = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const { isRead, type, page, limit } = req.query;
 
     const result = await getNotifications(userId, { isRead, type, page, limit });
@@ -49,7 +49,7 @@ export const getUserNotifications = async (req, res) => {
  */
 export const getUserUnreadCount = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const count = await getUnreadCount(userId);
 
     res.json({
@@ -73,7 +73,7 @@ export const getUserUnreadCount = async (req, res) => {
 export const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
 
     const notification = await markNotificationAsRead(id, userId);
 
@@ -104,7 +104,7 @@ export const markAsRead = async (req, res) => {
  */
 export const markAllAsReadHandler = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const count = await markAllNotificationsAsRead(userId);
 
     res.json({
@@ -128,7 +128,7 @@ export const markAllAsReadHandler = async (req, res) => {
  */
 export const getPreferences = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const preferences = await getNotificationPreferences(userId);
 
     res.json({
@@ -151,7 +151,7 @@ export const getPreferences = async (req, res) => {
  */
 export const updateUserPreferences = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const preferencesData = req.body;
 
     const preferences = await updatePreferences(userId, preferencesData);
@@ -177,7 +177,7 @@ export const updateUserPreferences = async (req, res) => {
  */
 export const registerDeviceHandler = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const deviceData = req.body;
 
     const result = await registerDevice(userId, deviceData);
@@ -203,7 +203,7 @@ export const registerDeviceHandler = async (req, res) => {
  */
 export const unregisterDeviceHandler = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.profileId;
     const { playerId } = req.params;
 
     const removed = await unregisterDevice(userId, playerId);

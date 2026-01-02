@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/services/websocket_service.dart';
+import '../../../../core/services/messaging_socket_service.dart';
 import '../../domain/entities/auth_tokens_entity.dart';
 import '../../domain/entities/session_entity.dart';
 import '../../domain/entities/user_entity.dart';
@@ -14,14 +15,17 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remoteDataSource;
   final AuthLocalDataSource _localDataSource;
   final WebSocketService _webSocketService;
+  final MessagingSocketService _messagingSocketService;
 
   AuthRepositoryImpl({
     required AuthRemoteDataSource remoteDataSource,
     required AuthLocalDataSource localDataSource,
     required WebSocketService webSocketService,
+    required MessagingSocketService messagingSocketService,
   })  : _remoteDataSource = remoteDataSource,
         _localDataSource = localDataSource,
-        _webSocketService = webSocketService;
+        _webSocketService = webSocketService,
+        _messagingSocketService = messagingSocketService;
 
   void _log(String method, String message) {
     print('[AuthRepository.$method] $message');
@@ -75,6 +79,16 @@ class AuthRepositoryImpl implements AuthRepository {
         _log('login', 'WebSocket init failed (non-blocking): $e');
       }
 
+      // Initialize Messaging Socket for real-time messaging
+      _log('login', 'Initializing Messaging Socket connection...');
+      try {
+        await _messagingSocketService.init(tokens.accessToken);
+        _log('login', 'Messaging Socket initialized successfully');
+      } catch (e) {
+        // Socket failure shouldn't fail login
+        _log('login', 'Messaging Socket init failed (non-blocking): $e');
+      }
+
       _log('login', 'Returning success');
       return (user as UserEntity, tokens as AuthTokensEntity);
     });
@@ -91,6 +105,14 @@ class AuthRepositoryImpl implements AuthRepository {
         _log('logout', 'WebSocket disconnect failed (non-blocking): $e');
       }
 
+      // Disconnect Messaging Socket
+      try {
+        _messagingSocketService.disconnect();
+        _log('logout', 'Messaging Socket disconnected');
+      } catch (e) {
+        _log('logout', 'Messaging Socket disconnect failed (non-blocking): $e');
+      }
+
       await _remoteDataSource.logout(sessionId: sessionId);
       await _localDataSource.clearAll();
     });
@@ -105,6 +127,14 @@ class AuthRepositoryImpl implements AuthRepository {
         _log('logoutAllDevices', 'WebSocket disconnected');
       } catch (e) {
         _log('logoutAllDevices', 'WebSocket disconnect failed (non-blocking): $e');
+      }
+
+      // Disconnect Messaging Socket
+      try {
+        _messagingSocketService.disconnect();
+        _log('logoutAllDevices', 'Messaging Socket disconnected');
+      } catch (e) {
+        _log('logoutAllDevices', 'Messaging Socket disconnect failed (non-blocking): $e');
       }
 
       final count = await _remoteDataSource.logoutAllDevices();
@@ -229,8 +259,15 @@ class AuthRepositoryImpl implements AuthRepository {
       } catch (e) {
         _log('restoreSession', 'WebSocket init failed (non-blocking): $e');
       }
+      
+      try {
+        await _messagingSocketService.init(tokens.accessToken);
+        _log('restoreSession', 'Messaging Socket initialized successfully');
+      } catch (e) {
+        _log('restoreSession', 'Messaging Socket init failed (non-blocking): $e');
+      }
     } else {
-      _log('restoreSession', 'No tokens found, skipping WebSocket init');
+      _log('restoreSession', 'No tokens found, skipping socket init');
     }
   }
 

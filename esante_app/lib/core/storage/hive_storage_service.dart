@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:hive_flutter/hive_flutter.dart';
 
 /// Service for managing Hive storage initialization and boxes
 class HiveStorageService {
   static const String _authBoxName = 'auth_box';
   static const String _userBoxName = 'user_box';
+  static const String _keyUser = 'cached_user';
 
   static Box<String>? _authBox;
   static Box<String>? _userBox;
@@ -36,6 +38,19 @@ class HiveStorageService {
       throw Exception('User box is not initialized. Call HiveStorageService.init() first.');
     }
     return _userBox!;
+  }
+
+  /// Get the current logged-in user's ID
+  static String? getCurrentUserId() {
+    try {
+      final userJson = _userBox?.get(_keyUser);
+      if (userJson == null) return null;
+      final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+      return userMap['id'] as String?;
+    } catch (e) {
+      print('[HiveStorageService.getCurrentUserId] Error: $e');
+      return null;
+    }
   }
 
   /// Close all boxes

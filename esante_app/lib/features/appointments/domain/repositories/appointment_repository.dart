@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import '../../../../core/error/failures.dart';
 import '../../presentation/bloc/doctor/doctor_appointment_bloc.dart';
 import '../entities/appointment_entity.dart';
+import '../entities/document_entity.dart';
 import '../entities/time_slot_entity.dart';
 
 /// Repository interface for appointment operations
@@ -119,11 +120,50 @@ abstract class AppointmentRepository {
   /// Get appointment statistics
   Future<Either<Failure, AppointmentStatistics>> getAppointmentStatistics();
 
+  /// Book a referral appointment for a patient with a specialist
+  Future<Either<Failure, AppointmentEntity>> referralBooking({
+    required String patientId,
+    required String specialistDoctorId,
+    required DateTime appointmentDate,
+    required String appointmentTime,
+    required String reason,
+    String? referralId,
+    String? notes,
+  });
+
   // ============== Shared Operations ==============
 
   /// Get appointment details
   Future<Either<Failure, AppointmentEntity>> getAppointmentDetails({
     required String appointmentId,
+  });
+
+  // ============== Document Operations ==============
+
+  /// Get documents attached to an appointment
+  Future<Either<Failure, List<AppointmentDocumentEntity>>> getAppointmentDocuments({
+    required String appointmentId,
+  });
+
+  /// Add document to an appointment (patient only)
+  Future<Either<Failure, AppointmentDocumentEntity>> addDocumentToAppointment({
+    required String appointmentId,
+    required String name,
+    required String url,
+    required DocumentType type,
+    String? description,
+  });
+
+  /// Remove document from an appointment (patient only)
+  Future<Either<Failure, void>> removeDocumentFromAppointment({
+    required String appointmentId,
+    required String documentId,
+  });
+
+  /// Upload file to storage and get URL
+  Future<Either<Failure, String>> uploadDocumentFile({
+    required String filePath,
+    required String fileName,
   });
 }
 

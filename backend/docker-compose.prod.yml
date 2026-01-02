@@ -124,6 +124,8 @@ services:
       - CONSUL_PORT=8500
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Socket.IO proxy target (WebSocket support)
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3007
     depends_on:
       consul:
         condition: service_healthy
@@ -250,7 +252,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3004
-      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_medical?authSource=admin
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_medical_records?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
@@ -280,7 +282,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3005
-      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_referral?authSource=admin
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/esante_referrals?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500

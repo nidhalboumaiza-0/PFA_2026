@@ -16,6 +16,7 @@ import '../../../domain/usecases/doctor/reject_appointment_usecase.dart';
 import '../../../domain/usecases/doctor/complete_appointment_usecase.dart';
 import '../../../domain/usecases/doctor/reschedule_appointment_usecase.dart';
 import '../../../domain/usecases/doctor/get_appointment_statistics_usecase.dart';
+import '../../../domain/usecases/doctor/referral_booking_usecase.dart';
 
 part 'doctor_appointment_event.dart';
 part 'doctor_appointment_state.dart';
@@ -32,6 +33,7 @@ class DoctorAppointmentBloc
   final CompleteAppointmentUseCase completeAppointmentUseCase;
   final RescheduleAppointmentUseCase rescheduleAppointmentUseCase;
   final GetAppointmentStatisticsUseCase getAppointmentStatisticsUseCase;
+  final ReferralBookingUseCase referralBookingUseCase;
   final AppointmentRepository repository; // Keep for approve/reject reschedule
   final WebSocketService webSocketService;
   
@@ -50,6 +52,7 @@ class DoctorAppointmentBloc
     required this.completeAppointmentUseCase,
     required this.rescheduleAppointmentUseCase,
     required this.getAppointmentStatisticsUseCase,
+    required this.referralBookingUseCase,
     required this.repository,
     required this.webSocketService,
   }) : super(DoctorAppointmentInitial()) {
@@ -69,6 +72,7 @@ class DoctorAppointmentBloc
     on<SelectScheduleDate>(_onSelectScheduleDate);
     on<RefreshDoctorAppointments>(_onRefreshDoctorAppointments);
     on<OnNewAppointmentRequest>(_onNewAppointmentRequest);
+    on<BookReferralAppointment>(_onBookReferralAppointment);
     
     // Subscribe to WebSocket events
     _subscribeToWebSocketEvents();
@@ -451,5 +455,36 @@ class DoctorAppointmentBloc
         selectedSlots: event.slots ?? [],
       ));
     }
+  }
+
+  Future<void> _onBookReferralAppointment(
+    BookReferralAppointment event,
+    Emitter<DoctorAppointmentState> emit,
+  ) async {
+    _log('_onBookReferralAppointment', 'Booking referral for patient ${event.patientId} with doctor ${event.specialistDoctorId}');
+    emit(ReferralBookingLoading());
+
+    final result = await referralBookingUseCase(
+      ReferralBookingParams(
+        patientId: event.patientId,
+        specialistDoctorId: event.specialistDoctorId,
+        appointmentDate: event.appointmentDate,
+        appointmentTime: event.appointmentTime,
+        reason: event.reason,
+        referralId: event.referralId,
+        notes: event.notes,
+      ),
+    );
+
+    result.fold(
+      (failure) {
+        _log('_onBookReferralAppointment', 'Failed: ${failure.message}');
+        emit(DoctorAppointmentError(message: failure.message));
+      },
+      (appointment) {
+        _log('_onBookReferralAppointment', 'Success: ${appointment.id}');
+        emit(ReferralBookingSuccess(appointment: appointment));
+      },
+    );
   }
 }

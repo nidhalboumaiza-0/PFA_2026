@@ -37,7 +37,8 @@ import {
   addFileToDossier,
   addFilesToDossier,
   deleteFile,
-  updateFileDescription
+  updateFileDescription,
+  getPatientMedicalHistory
 } from '../controllers/dossierMedicalController.js';
 import { auth, authorize } from '../../../../shared/index.js';
 import { uploadMiddleware, handleMulterError } from '../config/multerDocument.js';
@@ -126,6 +127,15 @@ router.get(
   auth,
   authorize('doctor'),
   getConsultationStatistics
+);
+
+// Doctor: Get patient's full medical history (requires appointment relationship)
+// Includes shared documents, consultations from all doctors, prescriptions
+router.get(
+  '/patient-history/:patientId',
+  auth,
+  authorize('doctor'),
+  getPatientMedicalHistory
 );
 
 // ============================

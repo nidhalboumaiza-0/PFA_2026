@@ -85,9 +85,15 @@ class AppointmentEntity extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Referral information
+  final bool isReferral;
+  final String? referredBy; // Doctor ID who referred
+  final String? referralId; // Reference to referral document
+
   // Optional populated data
   final PatientInfo? patientInfo;
   final DoctorInfo? doctorInfo;
+  final DoctorInfo? referringDoctorInfo; // Info of doctor who referred
 
   const AppointmentEntity({
     required this.id,
@@ -116,8 +122,12 @@ class AppointmentEntity extends Equatable {
     this.rescheduleRequest,
     required this.createdAt,
     required this.updatedAt,
+    this.isReferral = false,
+    this.referredBy,
+    this.referralId,
     this.patientInfo,
     this.doctorInfo,
+    this.referringDoctorInfo,
   });
 
   String get formattedDateTime {
@@ -165,8 +175,12 @@ class AppointmentEntity extends Equatable {
         rescheduleRequest,
         createdAt,
         updatedAt,
+        isReferral,
+        referredBy,
+        referralId,
         patientInfo,
         doctorInfo,
+        referringDoctorInfo,
       ];
 }
 
@@ -221,6 +235,8 @@ class DoctorInfo extends Equatable {
   final String specialty;
   final String? profilePhoto;
   final String? clinicName;
+  final double? rating;
+  final int? reviewCount;
 
   const DoctorInfo({
     required this.id,
@@ -229,11 +245,13 @@ class DoctorInfo extends Equatable {
     required this.specialty,
     this.profilePhoto,
     this.clinicName,
+    this.rating,
+    this.reviewCount,
   });
 
   String get fullName => 'Dr. $firstName $lastName';
 
   @override
   List<Object?> get props =>
-      [id, firstName, lastName, specialty, profilePhoto, clinicName];
+      [id, firstName, lastName, specialty, profilePhoto, clinicName, rating, reviewCount];
 }

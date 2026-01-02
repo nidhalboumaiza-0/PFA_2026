@@ -11,7 +11,10 @@ export const initializeConsumer = async () => {
   );
 
   await consumer.connect();
-  await consumer.subscribe([TOPICS.AUTH.USER_REGISTERED]);
+  await consumer.subscribe([
+    TOPICS.AUTH.USER_REGISTERED,
+    TOPICS.RDV.DOCTOR_RATING_UPDATED // Subscribe to rating update events
+  ]);
 
   // Handle user registration events
   consumer.registerHandler(TOPICS.AUTH.USER_REGISTERED, async (message) => {
@@ -72,6 +75,32 @@ export const initializeConsumer = async () => {
 
     } catch (error) {
       console.error('❌ Error handling user registration event:', error);
+      throw error; // Will be sent to DLQ
+    }
+  });
+
+  // Handle doctor rating updated events
+  consumer.registerHandler(TOPICS.RDV.DOCTOR_RATING_UPDATED, async (message) => {
+    try {
+      const { doctorId, rating, totalReviews } = message;
+
+      console.log(`📥 Received doctor rating update: ${doctorId} - ${rating} stars (${totalReviews} reviews)`);
+
+      const doctor = await Doctor.findById(doctorId);
+      if (!doctor) {
+        console.log(`⚠️ Doctor not found: ${doctorId}`);
+        return;
+      }
+
+      // Update doctor's rating
+      doctor.rating = rating;
+      doctor.totalReviews = totalReviews;
+      await doctor.save();
+
+      console.log(`✅ Updated doctor ${doctorId} rating to ${rating} (${totalReviews} reviews)`);
+
+    } catch (error) {
+      console.error('❌ Error handling doctor rating update:', error);
       throw error; // Will be sent to DLQ
     }
   });

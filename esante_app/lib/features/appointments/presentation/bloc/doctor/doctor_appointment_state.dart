@@ -204,3 +204,16 @@ class DoctorAppointmentError extends DoctorAppointmentState {
   @override
   List<Object?> get props => [message];
 }
+
+/// State when referral booking is in progress
+class ReferralBookingLoading extends DoctorAppointmentState {}
+
+/// State when referral appointment was successfully booked
+class ReferralBookingSuccess extends DoctorAppointmentState {
+  final AppointmentEntity appointment;
+
+  const ReferralBookingSuccess({required this.appointment});
+
+  @override
+  List<Object?> get props => [appointment];
+}

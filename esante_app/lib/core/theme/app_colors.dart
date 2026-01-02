@@ -8,6 +8,7 @@ class AppColors {
   static const Color primary = Color(0xFF2CA6FF);
   static const Color primaryLight = Color(0xFF6BC4FF);
   static const Color primaryDark = Color(0xFF0077CC);
+  static const Color secondary = Color(0xFF6366F1);  // Indigo secondary
 
   // ============== Semantic Colors ==============
   static const Color success = Color(0xFF22C55E);
@@ -21,10 +22,12 @@ class AppColors {
   static const Color textSecondaryStatic = Color(0xFF6B7280);
   static const Color white = Color(0xFFFFFFFF);
   static const Color black = Color(0xFF000000);
+  static const Color grey100 = Color(0xFFF3F4F6);
   static const Color grey200 = Color(0xFFE5E7EB);
   static const Color grey300 = Color(0xFFD1D5DB);
   static const Color grey400 = Color(0xFF9CA3AF);
   static const Color grey500 = Color(0xFF6B7280);
+  static const Color grey600 = Color(0xFF4B5563);
 
   // ============== Gradients ==============
   static const LinearGradient primaryGradient = LinearGradient(

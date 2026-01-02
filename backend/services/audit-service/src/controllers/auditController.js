@@ -347,7 +347,7 @@ export const markLogAsReviewed = async (req, res) => {
   try {
     const { logId } = req.params;
     const { reviewNotes } = req.body;
-    const adminId = req.user.userId;
+    const adminId = req.user.profileId;
 
     const auditLog = await AuditLog.findById(logId);
 

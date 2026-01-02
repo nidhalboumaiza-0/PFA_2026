@@ -27,7 +27,7 @@ import {
  */
 export const uploadDocument = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const {
       patientId: providedPatientId,
       consultationId,
@@ -158,7 +158,7 @@ export const uploadDocument = async (req, res, next) => {
  */
 export const getDocumentById = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { documentId } = req.params;
 
     const document = await MedicalDocument.findById(documentId);
@@ -235,7 +235,7 @@ export const getDocumentById = async (req, res, next) => {
  */
 export const getPatientDocuments = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { patientId } = req.params;
     const {
       documentType,
@@ -306,7 +306,7 @@ export const getPatientDocuments = async (req, res, next) => {
  */
 export const getConsultationDocuments = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { consultationId } = req.params;
 
     // Verify consultation exists and user has access
@@ -353,7 +353,7 @@ export const getConsultationDocuments = async (req, res, next) => {
  */
 export const getMyDocuments = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const { documentType, startDate, endDate, status, page, limit } = req.query;
 
     // Build query
@@ -395,7 +395,7 @@ export const getMyDocuments = async (req, res, next) => {
  */
 export const updateDocument = async (req, res, next) => {
   try {
-    const { id: userId } = req.user;
+    const { profileId: userId } = req.user;
     const { documentId } = req.params;
     const updates = req.body;
 
@@ -461,7 +461,7 @@ export const updateDocument = async (req, res, next) => {
  */
 export const deleteDocument = async (req, res, next) => {
   try {
-    const { id: userId } = req.user;
+    const { profileId: userId } = req.user;
     const { documentId } = req.params;
 
     const document = await MedicalDocument.findById(documentId);
@@ -507,7 +507,7 @@ export const deleteDocument = async (req, res, next) => {
  */
 export const downloadDocument = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { documentId } = req.params;
 
     const document = await MedicalDocument.findById(documentId);
@@ -558,7 +558,7 @@ export const downloadDocument = async (req, res, next) => {
  */
 export const updateDocumentSharing = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const { documentId } = req.params;
     const { isSharedWithAllDoctors, sharedWithDoctors } = req.body;
 
@@ -613,7 +613,7 @@ export const updateDocumentSharing = async (req, res, next) => {
  */
 export const getDocumentStatistics = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
 
     if (role === 'patient') {
       // Patient statistics

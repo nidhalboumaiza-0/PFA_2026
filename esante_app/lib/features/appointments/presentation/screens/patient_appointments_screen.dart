@@ -5,11 +5,13 @@ import 'package:lottie/lottie.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../core/utils/navigation_utils.dart';
 import '../../../../injection_container.dart';
 import '../../domain/entities/appointment_entity.dart';
 import '../bloc/patient/patient_appointment_bloc.dart';
 import '../widgets/appointment_card.dart';
 import '../widgets/reschedule_dialog.dart';
+import 'appointment_details_page.dart';
 
 class PatientAppointmentsScreen extends StatelessWidget {
   final bool showBackButton;
@@ -221,6 +223,7 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
             child: AppointmentCard(
               appointment: appointment,
               isPatientView: true,
+              onTap: () => _showAppointmentDetails(context, appointment),
               onCancel: appointment.canCancel
                   ? () => _showCancelDialog(context, appointment)
                   : null,
@@ -285,5 +288,20 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
 
   void _showRescheduleDialog(BuildContext context, AppointmentEntity appointment) {
     RescheduleDialog.show(context, appointment: appointment);
+  }
+
+  void _showAppointmentDetails(BuildContext context, AppointmentEntity appointment) {
+    context.pushPage(
+      AppointmentDetailsPage(
+        appointment: appointment,
+        isPatientView: true,
+        onAppointmentChanged: () {
+          // Refresh appointments when something changes
+          this.context.read<PatientAppointmentBloc>().add(
+            const LoadPatientAppointments(),
+          );
+        },
+      ),
+    );
   }
 }

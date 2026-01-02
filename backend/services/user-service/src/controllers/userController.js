@@ -159,7 +159,7 @@ export const updateDoctorProfile = async (req, res, next) => {
         // Handle clinicAddress coordinates conversion
         if (field === 'clinicAddress' && req.body.clinicAddress.coordinates) {
           const coords = req.body.clinicAddress.coordinates;
-          
+
           // Check if it's already in GeoJSON format
           if (coords.type === 'Point' && Array.isArray(coords.coordinates)) {
             // Already GeoJSON - validate the coordinates
@@ -353,6 +353,13 @@ export const searchDoctors = async (req, res, next) => {
             query: {
               isActive: true,
               isVerified: true,
+              ...(name && {
+                $or: [
+                  { firstName: { $regex: name, $options: 'i' } },
+                  { lastName: { $regex: name, $options: 'i' } },
+                  { clinicName: { $regex: name, $options: 'i' } }
+                ]
+              }),
               ...(specialty && { specialty: { $regex: specialty, $options: 'i' } }),
               ...(city && { 'clinicAddress.city': { $regex: city, $options: 'i' } })
             }
@@ -579,6 +586,48 @@ export const updateOneSignalPlayerId = async (req, res, next) => {
 
     res.status(200).json({
       message: 'OneSignal Player ID updated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get patient by ID (internal service-to-service call)
+ * GET /api/v1/users/patients/:patientId
+ * 
+ * Only accessible by internal services (via X-Internal-Service header)
+ */
+export const getPatientById = async (req, res, next) => {
+  try {
+    const { patientId } = req.params;
+
+    const patient = await Patient.findById(patientId).select('-__v');
+
+    if (!patient) {
+      return sendError(res, 404, 'PATIENT_NOT_FOUND',
+        'The patient you are looking for does not exist.');
+    }
+
+    if (!patient.isActive) {
+      return sendError(res, 404, 'PATIENT_NOT_ACTIVE',
+        'The patient account is not active.');
+    }
+
+    // Return limited patient info for service calls
+    res.status(200).json({
+      patient: {
+        _id: patient._id,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        phone: patient.phone,
+        gender: patient.gender,
+        dateOfBirth: patient.dateOfBirth,
+        profilePhoto: patient.profilePhoto,
+        bloodType: patient.bloodType,
+        allergies: patient.allergies,
+        chronicDiseases: patient.chronicDiseases
+      }
     });
   } catch (error) {
     next(error);

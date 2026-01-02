@@ -62,10 +62,11 @@ services:
     networks:
       - esante-network
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
-      interval: 30s
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1 || exit 1"]
+      interval: 15s
       timeout: 10s
-      retries: 5
+      retries: 15
+      start_period: 60s
 
   # Kafka UI - Web interface for Kafka management
   kafka-ui:
@@ -122,6 +123,9 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
+    volumes:
+      # Mount seed-consul.js for live updates without rebuild
+      - ./seed-consul.js:/app/seed-consul.js:ro
     depends_on:
       consul:
         condition: service_healthy
@@ -137,6 +141,9 @@ services:
     container_name: esante-data-seeder
     environment:
       - MONGO_URI=mongodb://admin:password@mongodb:27017
+    volumes:
+      # Mount seed-comprehensive.js for live updates without rebuild
+      - ./seed-comprehensive.js:/app/seed-comprehensive.js:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -157,7 +164,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -165,6 +172,13 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Socket.IO proxy target (WebSocket support)
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3007
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./api-gateway/src:/app/api-gateway/src:ro
     depends_on:
       consul:
         condition: service_healthy
@@ -172,6 +186,8 @@ services:
         condition: service_healthy
       config-seeder:
         condition: service_completed_successfully
+      notification-service:
+        condition: service_started
     networks:
       - esante-network
 
@@ -186,7 +202,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -195,6 +211,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/auth-service/src:/app/services/auth-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -216,7 +237,7 @@ services:
     ports:
       - "3002:3002"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -225,6 +246,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/user-service/src:/app/services/user-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -244,7 +270,7 @@ services:
     ports:
       - "3003:3003"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -253,6 +279,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/rdv-service/src:/app/services/rdv-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -272,15 +303,20 @@ services:
     ports:
       - "3004:3004"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
       - PORT=3004
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/esante_medical?authSource=admin
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/esante_medical_records?authSource=admin
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/medical-records-service/src:/app/services/medical-records-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -300,15 +336,20 @@ services:
     ports:
       - "3005:3005"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
       - PORT=3005
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/esante_referral?authSource=admin
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/esante_referrals?authSource=admin
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/referral-service/src:/app/services/referral-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -328,7 +369,7 @@ services:
     ports:
       - "3006:3006"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -337,6 +378,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/messaging-service/src:/app/services/messaging-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -358,7 +404,7 @@ services:
     ports:
       - "3007:3007"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -367,6 +413,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/notification-service/src:/app/services/notification-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -388,7 +439,7 @@ services:
     ports:
       - "3008:3008"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
       # Fallback values - used only if Consul unavailable
@@ -397,6 +448,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - KAFKA_BROKERS=kafka:9092
       - REDIS_HOST=redis
+    volumes:
+      # Development: Mount source for hot-reload
+      - ./shared:/app/shared:ro
+      - shared_node_modules:/app/shared/node_modules
+      - ./services/audit-service/src:/app/services/audit-service/src:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -411,6 +467,7 @@ services:
 
 volumes:
   mongodb_data:
+  shared_node_modules:
 
 networks:
   esante-network:

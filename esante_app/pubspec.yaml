@@ -56,6 +56,10 @@ dependencies:
   table_calendar: ^3.2.0
   socket_io_client: ^2.0.3+1
   easy_date_timeline: ^2.0.9
+  connectivity_plus: ^7.0.0
+  file_picker: ^10.3.8
+  url_launcher: ^6.3.1
+  open_filex: ^4.6.0
 
 dev_dependencies:
   flutter_test:

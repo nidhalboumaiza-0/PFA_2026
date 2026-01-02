@@ -30,7 +30,7 @@ let wsProxy = null;
 const setupSocketIOProxy = () => {
   // Use Docker container hostname for internal communication
   const socketIOTarget = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3007';
-  
+
   wsProxy = createProxyMiddleware({
     target: socketIOTarget,
     changeOrigin: true,
@@ -95,7 +95,7 @@ const setupProxies = () => {
   Object.entries(serviceConfig).forEach(([name, config]) => {
     // Skip socketio - handled by dedicated WebSocket proxy
     if (name === 'socketio') return;
-    
+
     const middleware = [];
 
     // Apply auth limiter for auth service
@@ -127,6 +127,8 @@ const setupProxies = () => {
       // Don't rewrite the path - services expect full /api/v1/<service>/... paths
       changeOrigin: true,
       ws: true, // Enable WebSocket proxying
+      proxyTimeout: 60000, // 60 seconds timeout
+      timeout: 60000, // Connection timeout
       onProxyReq: (proxyReq, req, res) => {
         // Forward user info to downstream services
         if (req.user) {
@@ -145,6 +147,8 @@ const setupProxies = () => {
         console.log(`📡 Proxying ${req.method} ${req.url} → ${config.serviceName}`);
       },
       onProxyRes: (proxyRes, req, res) => {
+        // Remove connection: close header to allow keep-alive
+        proxyRes.headers['connection'] = 'keep-alive';
         console.log(`✅ Response from ${name}: ${proxyRes.statusCode}`);
       },
       onError: (err, req, res) => {

@@ -3,12 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../../core/services/websocket_service.dart';
 import '../../../domain/entities/appointment_entity.dart';
+import '../../../domain/entities/document_entity.dart';
 import '../../../domain/entities/time_slot_entity.dart';
 import '../../../domain/usecases/patient/get_patient_appointments_usecase.dart';
 import '../../../domain/usecases/patient/get_doctor_availability_usecase.dart';
 import '../../../domain/usecases/patient/request_appointment_usecase.dart';
 import '../../../domain/usecases/patient/cancel_appointment_usecase.dart';
 import '../../../domain/usecases/patient/request_reschedule_usecase.dart';
+import '../../../domain/usecases/patient/add_document_usecase.dart';
 
 part 'patient_appointment_event.dart';
 part 'patient_appointment_state.dart';
@@ -20,6 +22,7 @@ class PatientAppointmentBloc
   final RequestAppointmentUseCase requestAppointmentUseCase;
   final CancelAppointmentUseCase cancelAppointmentUseCase;
   final RequestRescheduleUseCase requestRescheduleUseCase;
+  final AddDocumentToAppointmentUseCase addDocumentUseCase;
   final WebSocketService webSocketService;
   
   StreamSubscription<WebSocketEvent>? _webSocketSubscription;
@@ -31,6 +34,7 @@ class PatientAppointmentBloc
     required this.requestAppointmentUseCase,
     required this.cancelAppointmentUseCase,
     required this.requestRescheduleUseCase,
+    required this.addDocumentUseCase,
     required this.webSocketService,
   }) : super(PatientAppointmentInitial()) {
     on<LoadPatientAppointments>(_onLoadPatientAppointments);
@@ -187,8 +191,38 @@ class PatientAppointmentBloc
 
     result.fold(
       (failure) => emit(PatientAppointmentError(message: failure.message)),
-      (appointment) => emit(AppointmentRequestSuccess(appointment: appointment)),
+      (appointment) {
+        // If there are attachments, upload them to the appointment
+        if (event.attachments.isNotEmpty) {
+          _log('_onRequestAppointment', 'Uploading ${event.attachments.length} documents');
+          _uploadAttachments(appointment.id, event.attachments);
+        }
+        emit(AppointmentRequestSuccess(appointment: appointment));
+      },
     );
+  }
+
+  /// Upload document attachments to an appointment
+  Future<void> _uploadAttachments(String appointmentId, List<PendingDocumentAttachment> attachments) async {
+    for (final attachment in attachments) {
+      try {
+        final addResult = await addDocumentUseCase(
+          AddDocumentParams(
+            appointmentId: appointmentId,
+            name: attachment.fileName,
+            url: 'file://${attachment.localPath}',
+            type: attachment.type,
+            description: attachment.description,
+          ),
+        );
+        addResult.fold(
+          (failure) => _log('_uploadAttachments', 'Failed to upload ${attachment.fileName}: ${failure.message}'),
+          (_) => _log('_uploadAttachments', 'Uploaded ${attachment.fileName} successfully'),
+        );
+      } catch (e) {
+        _log('_uploadAttachments', 'Error uploading ${attachment.fileName}: $e');
+      }
+    }
   }
 
   Future<void> _onCancelAppointment(

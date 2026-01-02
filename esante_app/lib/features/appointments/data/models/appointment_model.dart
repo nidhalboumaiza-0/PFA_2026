@@ -29,8 +29,12 @@ class AppointmentModel extends AppointmentEntity {
     super.rescheduleRequest,
     required super.createdAt,
     required super.updatedAt,
+    super.isReferral,
+    super.referredBy,
+    super.referralId,
     super.patientInfo,
     super.doctorInfo,
+    super.referringDoctorInfo,
   });
 
   factory AppointmentModel.fromJson(Map<String, dynamic> json) {
@@ -77,11 +81,17 @@ class AppointmentModel extends AppointmentEntity {
           json['createdAt'] ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(
           json['updatedAt'] ?? DateTime.now().toIso8601String()),
+      isReferral: json['isReferral'] ?? false,
+      referredBy: json['referredBy']?.toString(),
+      referralId: json['referralId']?.toString(),
       patientInfo: json['patientInfo'] != null
           ? PatientInfoModel.fromJson(json['patientInfo'])
           : null,
       doctorInfo: json['doctorInfo'] != null
           ? DoctorInfoModel.fromJson(json['doctorInfo'])
+          : null,
+      referringDoctorInfo: json['referringDoctorInfo'] != null
+          ? DoctorInfoModel.fromJson(json['referringDoctorInfo'])
           : null,
     );
   }
@@ -96,6 +106,9 @@ class AppointmentModel extends AppointmentEntity {
         'status': status.name,
         'reason': reason,
         'notes': notes,
+        'isReferral': isReferral,
+        'referredBy': referredBy,
+        'referralId': referralId,
       };
 }
 
@@ -149,6 +162,8 @@ class DoctorInfoModel extends DoctorInfo {
     required super.specialty,
     super.profilePhoto,
     super.clinicName,
+    super.rating,
+    super.reviewCount,
   });
 
   factory DoctorInfoModel.fromJson(Map<String, dynamic> json) {
@@ -159,6 +174,8 @@ class DoctorInfoModel extends DoctorInfo {
       specialty: json['specialty'] ?? 'General Practice',
       profilePhoto: json['profilePhoto'],
       clinicName: json['clinicName'],
+      rating: (json['rating'] as num?)?.toDouble(),
+      reviewCount: json['reviewCount'] as int?,
     );
   }
 }

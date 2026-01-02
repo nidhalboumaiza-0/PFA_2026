@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:dartz/dartz.dart';
+import 'package:dio/dio.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../domain/entities/appointment_entity.dart';
+import '../../domain/entities/document_entity.dart';
 import '../../domain/entities/time_slot_entity.dart';
 import '../../domain/repositories/appointment_repository.dart';
 import '../../presentation/bloc/doctor/doctor_appointment_bloc.dart';
@@ -487,6 +489,32 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
     }
   }
 
+  @override
+  Future<Either<Failure, AppointmentEntity>> referralBooking({
+    required String patientId,
+    required String specialistDoctorId,
+    required DateTime appointmentDate,
+    required String appointmentTime,
+    required String reason,
+    String? referralId,
+    String? notes,
+  }) async {
+    try {
+      final appointment = await remoteDataSource.referralBooking(
+        patientId: patientId,
+        specialistDoctorId: specialistDoctorId,
+        appointmentDate: appointmentDate,
+        appointmentTime: appointmentTime,
+        reason: reason,
+        referralId: referralId,
+        notes: notes,
+      );
+      return Right(appointment);
+    } catch (e) {
+      return Left(_mapExceptionToFailure(e));
+    }
+  }
+
   // ============== Shared Operations ==============
 
   @override
@@ -499,6 +527,92 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       );
       return Right(appointment);
     } catch (e) {
+      return Left(_mapExceptionToFailure(e));
+    }
+  }
+
+  // ============== Document Operations ==============
+
+  @override
+  Future<Either<Failure, List<AppointmentDocumentEntity>>> getAppointmentDocuments({
+    required String appointmentId,
+  }) async {
+    try {
+      _log('getAppointmentDocuments', 'Getting documents for: $appointmentId');
+      final documents = await remoteDataSource.getAppointmentDocuments(
+        appointmentId: appointmentId,
+      );
+      return Right(documents.map((d) => d.toEntity()).toList());
+    } catch (e) {
+      _log('getAppointmentDocuments', 'Error: $e');
+      return Left(_mapExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Either<Failure, AppointmentDocumentEntity>> addDocumentToAppointment({
+    required String appointmentId,
+    required String name,
+    required String url,
+    required DocumentType type,
+    String? description,
+  }) async {
+    try {
+      _log('addDocumentToAppointment', 'Adding document "$name" to: $appointmentId');
+      final document = await remoteDataSource.addDocumentToAppointment(
+        appointmentId: appointmentId,
+        name: name,
+        url: url,
+        type: type,
+        description: description,
+      );
+      return Right(document.toEntity());
+    } catch (e) {
+      _log('addDocumentToAppointment', 'Error: $e');
+      return Left(_mapExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> removeDocumentFromAppointment({
+    required String appointmentId,
+    required String documentId,
+  }) async {
+    try {
+      _log('removeDocumentFromAppointment', 'Removing document $documentId from: $appointmentId');
+      await remoteDataSource.removeDocumentFromAppointment(
+        appointmentId: appointmentId,
+        documentId: documentId,
+      );
+      return const Right(null);
+    } catch (e) {
+      _log('removeDocumentFromAppointment', 'Error: $e');
+      return Left(_mapExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Either<Failure, String>> uploadDocumentFile({
+    required String filePath,
+    required String fileName,
+  }) async {
+    try {
+      _log('uploadDocumentFile', 'Uploading file: $fileName');
+      
+      // For now, we'll use a simple file upload approach
+      // In production, this would upload to S3 or similar storage
+      // and return the URL
+      
+      // Mock implementation - in real app, upload to cloud storage
+      // The backend expects a URL, so we'd need a separate upload endpoint
+      // or use a service like AWS S3, Cloudinary, etc.
+      
+      // For development, we can use a placeholder approach
+      // where the app shows local files and uploads when appointment is created
+      
+      return Right('file://$filePath');
+    } catch (e) {
+      _log('uploadDocumentFile', 'Error: $e');
       return Left(_mapExceptionToFailure(e));
     }
   }

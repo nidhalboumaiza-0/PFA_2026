@@ -12,6 +12,8 @@ import '../../../prescriptions/presentation/screens/create_prescription_screen.d
 import '../bloc/doctor/doctor_appointment_bloc.dart';
 import '../widgets/appointment_card.dart';
 import '../widgets/doctor_reschedule_dialog.dart';
+import 'appointment_details_page.dart';
+import 'referral_booking_screen.dart';
 
 class DoctorAppointmentsScreen extends StatelessWidget {
   final bool showBackButton;
@@ -25,8 +27,9 @@ class DoctorAppointmentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Use singleton BLoC from DI for real-time WebSocket updates
     final bloc = sl<DoctorAppointmentBloc>();
-    // Load appointments when screen opens
+    // Load BOTH appointments and requests when screen opens
     bloc.add(const LoadDoctorAppointments());
+    bloc.add(const LoadAppointmentRequests());
     
     return BlocProvider.value(
       value: bloc,
@@ -72,6 +75,26 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
       appBar: CustomAppBar(
         title: 'My Appointments',
         showBackButton: widget.showBackButton,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ReferralBookingScreen(),
+            ),
+          );
+        },
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.send_rounded, color: Colors.white),
+        label: Text(
+          'Refer Patient',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 14.sp,
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -197,6 +220,7 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
 
   void _refreshData(BuildContext context) {
     context.read<DoctorAppointmentBloc>().add(const LoadDoctorAppointments());
+    context.read<DoctorAppointmentBloc>().add(const LoadAppointmentRequests());
   }
 
   Widget _buildRequestsTab(BuildContext context) {
@@ -246,6 +270,7 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
               child: AppointmentCard(
                 appointment: appointment,
                 isPatientView: false,
+                onTap: () => _showAppointmentDetails(context, appointment),
                 onConfirm: () => _confirmAppointment(context, appointment),
                 onReject: () => _showRejectDialog(context, appointment),
               ),
@@ -308,6 +333,7 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
                 child: AppointmentCard(
                   appointment: appointment,
                   isPatientView: false,
+                  onTap: () => _showAppointmentDetails(context, appointment),
                   onComplete: () => _showCompleteDialog(context, appointment),
                   onReschedule: hasRescheduleRequest 
                       ? null 
@@ -388,6 +414,7 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
                 child: AppointmentCard(
                   appointment: appointment,
                   isPatientView: false,
+                  onTap: () => _showAppointmentDetails(context, appointment),
                   onCreatePrescription: appointment.status == AppointmentStatus.completed
                       ? () => context.pushPage(
                             CreatePrescriptionScreen(
@@ -654,6 +681,19 @@ class _DoctorAppointmentsViewState extends State<_DoctorAppointmentsView>
             child: const Text('Decline'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAppointmentDetails(BuildContext context, AppointmentEntity appointment) {
+    context.pushPage(
+      AppointmentDetailsPage(
+        appointment: appointment,
+        isPatientView: false,
+        onAppointmentChanged: () {
+          // Refresh appointments when something changes
+          _refreshData(this.context);
+        },
       ),
     );
   }

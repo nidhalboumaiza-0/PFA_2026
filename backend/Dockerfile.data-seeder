@@ -9,10 +9,10 @@ RUN apk add --no-cache curl
 RUN echo '{"type": "module", "dependencies": {"mongoose": "^8.0.0", "bcryptjs": "^2.4.3"}}' > package.json
 
 # Copy seed script
-COPY seed-data.js ./
+COPY seed-comprehensive.js ./
 
 # Install dependencies
 RUN npm install
 
 # Run the seeder
-CMD ["node", "seed-data.js"]
+CMD ["node", "seed-comprehensive.js"]

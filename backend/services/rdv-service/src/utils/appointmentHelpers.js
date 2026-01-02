@@ -5,6 +5,7 @@ import { cacheGet, cacheSet, getUserServiceUrl } from '../../../../shared/index.
 
 // Cache TTL
 const DOCTOR_CACHE_TTL = 600; // 10 minutes
+const PATIENT_CACHE_TTL = 600; // 10 minutes
 
 /**
  * Fetch doctor profile from user service (cached)
@@ -33,6 +34,38 @@ export const fetchDoctorProfile = async (doctorId) => {
     return doctor;
   } catch (error) {
     throw new Error('Doctor not found or inactive');
+  }
+};
+
+/**
+ * Fetch patient profile from user service (cached)
+ */
+export const fetchPatientProfile = async (patientId) => {
+  const cacheKey = `rdv_patient:${patientId}`;
+  
+  // Try cache first
+  const cached = await cacheGet(cacheKey);
+  if (cached) {
+    console.log(`📦 Cache HIT: RDV patient ${patientId}`);
+    return cached;
+  }
+
+  try {
+    const userServiceUrl = await getUserServiceUrl();
+    const response = await axios.get(
+      `${userServiceUrl}/api/v1/users/patients/${patientId}`,
+      { headers: { 'X-Internal-Service': 'rdv-service' } }
+    );
+    const patient = response.data.patient;
+    
+    // Cache for 10 minutes
+    await cacheSet(cacheKey, patient, PATIENT_CACHE_TTL);
+    console.log(`💾 Cache SET: RDV patient ${patientId}`);
+    
+    return patient;
+  } catch (error) {
+    console.error(`Failed to fetch patient ${patientId}:`, error.message);
+    return null;
   }
 };
 
@@ -144,6 +177,7 @@ export const canCancelAppointment = (appointmentDate, appointmentTime) => {
 
 export default {
   fetchDoctorProfile,
+  fetchPatientProfile,
   checkSlotAvailability,
   bookTimeSlot,
   freeTimeSlot,

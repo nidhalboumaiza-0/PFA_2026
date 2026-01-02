@@ -2,7 +2,7 @@ import Notification from '../models/Notification.js';
 import NotificationPreference from '../models/NotificationPreference.js';
 import { sendPushNotification } from './pushNotificationService.js';
 import { sendEmailNotification, isQuietHours } from './emailService.js';
-import { isUserOnline } from '../utils/helpers.js';
+import { emitNotificationToUser, isUserConnectedLocally } from '../socket/socket.js';
 
 // Socket.IO instance (will be set by server)
 let io = null;
@@ -22,10 +22,15 @@ export const getSocketIO = () => {
  */
 const getPreferenceKey = (type) => {
   const typeMap = {
+    new_appointment_request: 'appointmentConfirmed', // Uses same preference as appointments
     appointment_confirmed: 'appointmentConfirmed',
     appointment_rejected: 'appointmentConfirmed',
     appointment_reminder: 'appointmentReminder',
     appointment_cancelled: 'appointmentCancelled',
+    appointment_rescheduled: 'appointmentConfirmed',
+    reschedule_approved: 'appointmentConfirmed',
+    reschedule_rejected: 'appointmentConfirmed',
+    reschedule_requested: 'appointmentConfirmed',
     new_message: 'newMessage',
     referral_received: 'referral',
     referral_scheduled: 'referral',
@@ -81,7 +86,7 @@ export const createNotification = async (notificationData) => {
     // Get user's notification preferences
     const preferences = await getNotificationPreferences(userId);
     const channelPrefs = getPreferencesForType(preferences, type);
-    
+
     // Check quiet hours for push notifications
     const inQuietHours = isQuietHours(preferences);
 
@@ -134,33 +139,44 @@ export const createNotification = async (notificationData) => {
       notification.channels.push.oneSignalId = pushResult.oneSignalId;
       notification.channels.push.error = pushResult.error;
     }
-    
+
     // Send email notification if enabled (ignores quiet hours)
     if (channelPrefs.email) {
       const emailResult = await sendEmailNotification(userId, notification);
-      
+
       notification.channels.email.sent = emailResult.sent;
       notification.channels.email.sentAt = emailResult.sentAt;
       notification.channels.email.messageId = emailResult.messageId;
       notification.channels.email.error = emailResult.error;
     }
 
-    // Send in-app notification via Socket.IO if enabled and user is online
-    if (channelPrefs.inApp && io) {
-      const userOnline = await isUserOnline(userId);
+    // Send in-app notification via Socket.IO if enabled
+    // Always emit - Socket.IO will deliver if user is connected, otherwise it's a no-op
+    // Push notifications (OneSignal) handle offline delivery separately
+    if (channelPrefs.inApp) {
+      // Check if user is connected to THIS service's Socket.IO (local check, no HTTP call)
+      const isConnected = isUserConnectedLocally(userId);
       
-      if (userOnline) {
-        io.to(userId.toString()).emit('new_notification', {
-          id: notification._id,
-          title,
-          body,
-          type,
-          priority,
-          actionUrl,
-          actionData,
-          createdAt: new Date(),
-        });
-        notification.channels.inApp.delivered = true;
+      // Always emit the notification - if user is connected they get it immediately
+      // If not connected, they'll see it when they fetch notifications + get push via OneSignal
+      emitNotificationToUser(userId, {
+        id: notification._id,
+        title,
+        body,
+        type,
+        priority,
+        actionUrl,
+        actionData,
+        createdAt: new Date(),
+      });
+      
+      // Track if it was delivered in real-time (user was connected)
+      notification.channels.inApp.delivered = isConnected;
+      
+      if (isConnected) {
+        console.log(`📡 Real-time notification delivered to user ${userId} via Socket.IO`);
+      } else {
+        console.log(`📡 Socket.IO event emitted for user ${userId} (user not currently connected - will receive via push/fetch)`);
       }
     }
 
@@ -268,7 +284,7 @@ export const updatePreferences = async (userId, preferencesData) => {
     ...preferences.preferences,
     ...preferencesData.preferences,
   };
-  
+
   // Update quiet hours if provided
   if (preferencesData.quietHours) {
     preferences.quietHours = {
@@ -308,7 +324,7 @@ export const unregisterDevice = async (userId, playerId) => {
   }
 
   const removed = preferences.removeDevice(playerId);
-  
+
   if (removed) {
     await preferences.save();
   }

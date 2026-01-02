@@ -67,6 +67,7 @@ class ApiList {
   static const String doctorAppointmentRequests = '$_appointmentsBase/doctor/requests';
   static const String doctorAppointments = '$_appointmentsBase/doctor/my-appointments';
   static const String doctorStatistics = '$_appointmentsBase/doctor/statistics';
+  static const String doctorReferralBooking = '$_appointmentsBase/referral-booking';
   
   static String appointmentConfirm(String appointmentId) => 
       '$_appointmentsBase/$appointmentId/confirm';
@@ -85,6 +86,20 @@ class ApiList {
   static String appointmentDetails(String appointmentId) => 
       '$_appointmentsBase/$appointmentId';
 
+  // Document attachments
+  static String appointmentDocuments(String appointmentId) =>
+      '$_appointmentsBase/$appointmentId/documents';
+  static String appointmentDocumentDelete(String appointmentId, String documentId) =>
+      '$_appointmentsBase/$appointmentId/documents/$documentId';
+
+  // ============== Reviews Endpoints ==============
+  static const String _reviewsBase = '/api/v1/reviews';
+  static const String reviews = _reviewsBase;
+  
+  static String reviewsByDoctor(String doctorId) => '$_reviewsBase/doctors/$doctorId';
+  static String reviewByAppointment(String appointmentId) => '$_reviewsBase/appointments/$appointmentId';
+  static String reviewById(String reviewId) => '$_reviewsBase/$reviewId';
+
   // ============== Medical Records Endpoints ==============
   static const String _medicalBase = '/api/v1/medical';
 
@@ -98,4 +113,22 @@ class ApiList {
 
   // Doctor prescription operations
   static const String doctorCreatePrescription = '$_medicalBase/prescriptions';
+
+  // ============== Messaging Endpoints ==============
+  static const String _messagesBase = '/api/v1/messages';
+  
+  // Conversations
+  static const String conversations = '$_messagesBase/conversations';
+  static String conversationMessages(String conversationId) =>
+      '$_messagesBase/conversations/$conversationId/messages';
+  static String conversationMarkRead(String conversationId) =>
+      '$_messagesBase/conversations/$conversationId/mark-read';
+  static String conversationSendFile(String conversationId) =>
+      '$_messagesBase/conversations/$conversationId/send-file';
+  
+  // Messages
+  static String deleteMessage(String messageId) => '$_messagesBase/$messageId';
+  static const String unreadCount = '$_messagesBase/unread-count';
+  static const String searchMessages = '$_messagesBase/search';
+  static String userOnlineStatus(String userId) => '$_messagesBase/users/$userId/online-status';
 }

@@ -43,6 +43,7 @@ class RequestAppointment extends PatientAppointmentEvent {
   final String appointmentTime;
   final String reason;
   final String? notes;
+  final List<PendingDocumentAttachment> attachments;
 
   const RequestAppointment({
     required this.doctorId,
@@ -50,11 +51,12 @@ class RequestAppointment extends PatientAppointmentEvent {
     required this.appointmentTime,
     required this.reason,
     this.notes,
+    this.attachments = const [],
   });
 
   @override
   List<Object?> get props =>
-      [doctorId, appointmentDate, appointmentTime, reason, notes];
+      [doctorId, appointmentDate, appointmentTime, reason, notes, attachments];
 }
 
 class CancelPatientAppointment extends PatientAppointmentEvent {

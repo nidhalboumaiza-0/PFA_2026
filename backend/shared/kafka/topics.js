@@ -34,7 +34,9 @@ const TOPICS = {
     RESCHEDULE_REQUESTED: 'rdv.reschedule.requested',
     RESCHEDULE_APPROVED: 'rdv.reschedule.approved',
     RESCHEDULE_REJECTED: 'rdv.reschedule.rejected',
-    REFERRAL_BOOKED: 'rdv.referral.booked'
+    REFERRAL_BOOKED: 'rdv.referral.booked',
+    REVIEW_CREATED: 'rdv.review.created',
+    DOCTOR_RATING_UPDATED: 'rdv.doctor.rating.updated'
   },
 
   // Medical Records Events

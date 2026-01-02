@@ -19,7 +19,7 @@ import {
  */
 export const createConsultation = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const {
       appointmentId,
       chiefComplaint,
@@ -104,7 +104,7 @@ export const createConsultation = async (req, res, next) => {
  */
 export const getConsultationById = async (req, res, next) => {
   try {
-    const { id: userId, role } = req.user;
+    const { profileId: userId, role } = req.user;
     const { consultationId } = req.params;
 
     const consultation = await Consultation.findById(consultationId);
@@ -152,7 +152,7 @@ export const getConsultationById = async (req, res, next) => {
  */
 export const updateConsultation = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { consultationId } = req.params;
     const updates = req.body;
 
@@ -230,7 +230,7 @@ export const updateConsultation = async (req, res, next) => {
  */
 export const getConsultationFullDetails = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { consultationId } = req.params;
 
     const consultation = await Consultation.findById(consultationId);
@@ -322,7 +322,7 @@ export const getConsultationFullDetails = async (req, res, next) => {
  */
 export const getPatientTimeline = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { patientId } = req.params;
     const { startDate, endDate, doctorId: filterDoctorId, page, limit } = req.query;
 
@@ -376,7 +376,7 @@ export const getPatientTimeline = async (req, res, next) => {
  */
 export const searchPatientHistory = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { patientId } = req.params;
     const { keyword, diagnosis, dateFrom, dateTo, page, limit } = req.query;
 
@@ -441,7 +441,7 @@ export const searchPatientHistory = async (req, res, next) => {
  */
 export const getDoctorConsultations = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
     const { startDate, endDate, page, limit } = req.query;
 
     // Build query
@@ -495,7 +495,7 @@ export const getDoctorConsultations = async (req, res, next) => {
  */
 export const getMyMedicalHistory = async (req, res, next) => {
   try {
-    const { id: patientId } = req.user;
+    const { profileId: patientId } = req.user;
     const { page, limit } = req.query;
 
     const query = {
@@ -539,7 +539,7 @@ export const getMyMedicalHistory = async (req, res, next) => {
  */
 export const getConsultationStatistics = async (req, res, next) => {
   try {
-    const { id: doctorId } = req.user;
+    const { profileId: doctorId } = req.user;
 
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());

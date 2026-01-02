@@ -8,7 +8,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
 import '../../../doctors/domain/entities/doctor_entity.dart';
+import '../../domain/entities/document_entity.dart';
 import '../bloc/patient/patient_appointment_bloc.dart';
+import '../widgets/document_attachment_widget.dart';
 
 class BookAppointmentScreen extends StatelessWidget {
   final DoctorEntity doctor;
@@ -50,12 +52,20 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
   final EasyInfiniteDateTimelineController _dateController = EasyInfiniteDateTimelineController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   String? _reasonError;
+  
+  // Document attachments
+  List<PendingDocumentAttachment> _attachments = [];
 
   @override
   void dispose() {
     _reasonController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  String _getDayName(int weekday) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days[weekday - 1];
   }
 
   @override
@@ -156,6 +166,10 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
           // Reason and Notes
           if (state.canBook) ...[
             _buildReasonSection(),
+            SizedBox(height: 16.h),
+            
+            // Document Attachments Section
+            _buildDocumentSection(),
             SizedBox(height: 24.h),
           ],
 
@@ -290,6 +304,85 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
               }
             },
             showTimelineHeader: false,
+            itemBuilder: (context, date, isSelected, onTap) {
+              final normalizedDate = DateTime(date.year, date.month, date.day);
+              final isAvailable = availableDateSet.contains(normalizedDate);
+              final isToday = DateTime.now().day == date.day &&
+                  DateTime.now().month == date.month &&
+                  DateTime.now().year == date.year;
+
+              return GestureDetector(
+                onTap: () => onTap(),
+                child: Container(
+                  width: 64.w,
+                  height: 80.h,
+                  margin: EdgeInsets.symmetric(horizontal: 4.w),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary
+                        : isAvailable
+                            ? AppColors.success.withValues(alpha: 0.12)
+                            : AppColors.grey200.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12.r),
+                    border: isToday && !isSelected
+                        ? Border.all(color: AppColors.primary, width: 2)
+                        : isAvailable && !isSelected
+                            ? Border.all(color: AppColors.success.withValues(alpha: 0.4), width: 1.5)
+                            : null,
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _getDayName(date.weekday),
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? Colors.white
+                                  : isAvailable
+                                      ? AppColors.success
+                                      : AppColors.grey400,
+                            ),
+                          ),
+                          SizedBox(height: 4.h),
+                          Text(
+                            '${date.day}',
+                            style: TextStyle(
+                              fontSize: 22.sp,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected
+                                  ? Colors.white
+                                  : isToday
+                                      ? AppColors.primary
+                                      : isAvailable
+                                          ? AppColors.success
+                                          : AppColors.grey400,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Available indicator dot at bottom
+                      if (isAvailable && !isSelected)
+                        Positioned(
+                          bottom: 6.h,
+                          child: Container(
+                            width: 6.w,
+                            height: 6.h,
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
             dayProps: EasyDayProps(
               height: 80.h,
               width: 64.w,
@@ -519,6 +612,34 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
     );
   }
 
+  Widget _buildDocumentSection() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16.w),
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: DocumentAttachmentWidget(
+        attachments: _attachments,
+        onAttachmentsChanged: (newAttachments) {
+          setState(() {
+            _attachments = newAttachments;
+          });
+        },
+        maxFiles: 5,
+        maxFileSizeMB: 10,
+      ),
+    );
+  }
+
   Widget _buildBookButton(
       BuildContext context, DoctorAvailabilityLoaded state) {
     return Padding(
@@ -558,6 +679,7 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
                         notes: _notesController.text.trim().isNotEmpty
                             ? _notesController.text.trim()
                             : null,
+                        attachments: _attachments,
                       ),
                     );
               }

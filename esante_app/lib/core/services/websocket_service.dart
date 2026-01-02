@@ -79,14 +79,14 @@ class WebSocketService {
     _isConnecting = true;
     _currentToken = token;
 
-    // Connect directly to notification-service on port 3007
-    // The API Gateway WebSocket proxy has stability issues
-    final socketUrl = baseUrl ?? 'http://10.0.2.2:3007';
-    _log('init', 'Connecting to WebSocket at $socketUrl');
+    // Connect to notification-service via API Gateway on port 3000
+    // The gateway proxies socket connections to the notification-service
+    final gatewayUrl = baseUrl ?? 'http://10.0.2.2:3000';
+    _log('init', 'Connecting to WebSocket via gateway at $gatewayUrl/notifications');
 
     try {
       _socket = io.io(
-        socketUrl,
+        '$gatewayUrl/notifications',
         io.OptionBuilder()
             .setTransports(['websocket']) // Use websocket only for mobile
             .setAuth({'token': token})

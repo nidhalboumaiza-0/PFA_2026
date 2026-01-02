@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/connection_banner.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/splash/presentation/screens/splash_screen.dart';
 import 'injection_container.dart' as di;
@@ -43,6 +44,12 @@ class ESanteApp extends StatelessWidget {
             title: 'eSanté',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
+            builder: (context, child) {
+              // Wrap entire app with connection banner for global offline notification
+              return ConnectionBanner(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: const SplashScreen(),
           ),
         );

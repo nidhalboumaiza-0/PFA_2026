@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/error/failures.dart';
 import '../../domain/entities/prescription_entity.dart';
 import '../../domain/usecases/get_my_prescriptions.dart';
 import '../../domain/usecases/get_prescription_by_id.dart';
@@ -41,7 +42,10 @@ class PrescriptionBloc extends Bloc<PrescriptionEvent, PrescriptionState> {
     );
 
     result.fold(
-      (failure) => emit(PrescriptionError(message: failure.message)),
+      (failure) => emit(PrescriptionError(
+        message: failure.message,
+        isNetworkError: failure is NetworkFailure,
+      )),
       (prescriptions) => emit(PrescriptionsLoaded(prescriptions: prescriptions)),
     );
   }
@@ -55,7 +59,10 @@ class PrescriptionBloc extends Bloc<PrescriptionEvent, PrescriptionState> {
     final result = await getPrescriptionByIdUseCase(event.prescriptionId);
 
     result.fold(
-      (failure) => emit(PrescriptionError(message: failure.message)),
+      (failure) => emit(PrescriptionError(
+        message: failure.message,
+        isNetworkError: failure is NetworkFailure,
+      )),
       (prescription) => emit(PrescriptionDetailsLoaded(prescription: prescription)),
     );
   }
@@ -72,7 +79,10 @@ class PrescriptionBloc extends Bloc<PrescriptionEvent, PrescriptionState> {
     emit(PrescriptionCreating());
     final result = await createPrescriptionUseCase!(event.params);
     result.fold(
-      (failure) => emit(PrescriptionError(message: failure.message)),
+      (failure) => emit(PrescriptionError(
+        message: failure.message,
+        isNetworkError: failure is NetworkFailure,
+      )),
       (prescription) => emit(PrescriptionCreated(prescription: prescription)),
     );
   }
