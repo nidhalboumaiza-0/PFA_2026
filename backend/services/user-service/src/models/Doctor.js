@@ -7,6 +7,11 @@ const doctorSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true
+  },
   firstName: {
     type: String,
     required: [true, 'First name is required'],

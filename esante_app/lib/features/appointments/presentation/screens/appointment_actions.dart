@@ -9,6 +9,7 @@ import '../../../doctors/domain/usecases/get_appointment_review_usecase.dart';
 import '../../../doctors/presentation/screens/doctor_detail_screen.dart';
 import '../../../prescriptions/presentation/screens/create_prescription_screen.dart';
 import '../../../prescriptions/presentation/screens/my_prescriptions_screen.dart';
+import '../../../medical_records/presentation/screens/patient_history_screen.dart';
 import 'referral_booking_screen.dart';
 
 /// Widget showing patient-specific actions for an appointment
@@ -370,8 +371,12 @@ class DoctorAppointmentActions extends StatelessWidget {
   }
 
   void _viewPatientHistory(BuildContext context) {
-    // TODO: Navigate to patient history screen
-    AppSnackBar.info(context, 'Patient history coming soon');
+    context.pushPage(
+      PatientHistoryScreen(
+        patientId: appointment.patientId,
+        patientName: appointment.patientInfo?.fullName,
+      ),
+    );
   }
 }
 

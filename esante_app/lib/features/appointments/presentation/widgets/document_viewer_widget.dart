@@ -1,9 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:open_filex/open_filex.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/document_entity.dart';
+import '../screens/document_preview_screen.dart';
 
 /// Widget for viewing documents attached to an appointment
 class DocumentViewerWidget extends StatelessWidget {
@@ -272,98 +271,11 @@ class DocumentViewerWidget extends StatelessWidget {
   }
 
   Future<void> _openDocument(BuildContext context, AppointmentDocumentEntity doc) async {
-    final url = doc.url;
-    
-    // Handle local files
-    if (url.startsWith('file://')) {
-      final filePath = url.replaceFirst('file://', '');
-      final file = File(filePath);
-      
-      if (await file.exists()) {
-        if (doc.isImage) {
-          // Show image in dialog
-          if (context.mounted) {
-            _showImageDialog(context, filePath, doc.name);
-          }
-        } else {
-          // Try to open with system default app using open_filex
-          final result = await OpenFilex.open(filePath);
-          if (result.type != ResultType.done && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Cannot open file: ${result.message}')),
-            );
-          }
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('File not found')),
-          );
-        }
-      }
-      return;
-    }
-
-    // Handle remote URLs - try to open with open_filex
-    final result = await OpenFilex.open(url);
-    if (result.type != ResultType.done && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cannot open document: ${result.message}')),
-      );
-    }
-  }
-
-  void _showImageDialog(BuildContext context, String filePath, String title) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    constraints: const BoxConstraints(),
-                    padding: EdgeInsets.zero,
-                  ),
-                ],
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(16.r)),
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.file(
-                  File(filePath),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ],
-        ),
+    // Navigate to full-screen document preview
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentPreviewScreen(document: doc),
       ),
     );
   }

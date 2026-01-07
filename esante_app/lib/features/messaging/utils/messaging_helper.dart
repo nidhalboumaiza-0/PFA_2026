@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../injection_container.dart';
@@ -66,7 +65,7 @@ class MessagingHelper {
         // Close loading dialog
         if (context.mounted) {
           Navigator.of(context).pop();
-          AppSnackbar.showError(context, state.message);
+          AppSnackBar.error(context, state.message);
         }
         break;
       }
@@ -98,7 +97,7 @@ class MessageUserButton extends StatelessWidget {
         text: 'Send Message',
         icon: Icons.chat_bubble_outline,
         onPressed: () => _startConversation(context),
-        type: ButtonType.outlined,
+        isOutlined: true,
       );
     }
 

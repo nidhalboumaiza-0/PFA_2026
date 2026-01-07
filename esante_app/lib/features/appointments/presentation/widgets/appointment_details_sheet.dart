@@ -112,16 +112,15 @@ class _AppointmentDetailsSheetState extends State<AppointmentDetailsSheet> {
     if (_pendingAttachments.isEmpty) return;
 
     for (final attachment in _pendingAttachments) {
-      final result = await _repository.addDocumentToAppointment(
+      // First upload the file to S3
+      final uploadResult = await _repository.uploadDocumentFile(
+        filePath: attachment.localPath,
+        fileName: attachment.fileName,
         appointmentId: widget.appointment.id,
-        name: attachment.fileName,
-        url: 'file://${attachment.localPath}',
-        type: attachment.type,
-        description: attachment.description,
       );
 
-      result.fold(
-        (failure) {
+      await uploadResult.fold(
+        (failure) async {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to upload ${attachment.fileName}'),
@@ -129,10 +128,31 @@ class _AppointmentDetailsSheetState extends State<AppointmentDetailsSheet> {
             ),
           );
         },
-        (document) {
-          setState(() {
-            _documents.add(document);
-          });
+        (url) async {
+          // Then add document to appointment with the S3 URL
+          final result = await _repository.addDocumentToAppointment(
+            appointmentId: widget.appointment.id,
+            name: attachment.fileName,
+            url: url,
+            type: attachment.type,
+            description: attachment.description,
+          );
+
+          result.fold(
+            (failure) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to save ${attachment.fileName}'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            },
+            (document) {
+              setState(() {
+                _documents.add(document);
+              });
+            },
+          );
         },
       );
     }

@@ -11,6 +11,7 @@ import {
   normalizeDateToStartOfDay,
   normalizeDateToEndOfDay
 } from '../utils/appointmentHelpers.js';
+import { uploadDocumentToS3, getSignedDocumentUrl } from '../services/s3Service.js';
 
 /**
  * Doctor: Set availability
@@ -270,6 +271,17 @@ export const requestAppointment = async (req, res, next) => {
     // Verify doctor exists and is active
     const doctor = await fetchDoctorProfile(doctorId);
 
+    // Check if the appointment time slot is in the past (for today's appointments)
+    const appointmentDateTime = new Date(appointmentDate);
+    const [hours, minutes] = appointmentTime.split(':').map(Number);
+    appointmentDateTime.setHours(hours, minutes, 0, 0);
+    
+    const now = new Date();
+    if (appointmentDateTime < now) {
+      return sendError(res, 400, 'TIME_SLOT_PASSED',
+        'Cannot book an appointment for a time slot that has already passed.');
+    }
+
     // Check for conflicts
     const hasConflict = await checkAppointmentConflict(
       patientId,
@@ -366,11 +378,36 @@ export const getAppointmentRequests = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Populate patient info for each appointment
+    const appointmentsWithPatientInfo = await Promise.all(
+      appointments.map(async (apt) => {
+        const aptObj = apt.toObject();
+        try {
+          const patient = await fetchPatientProfile(apt.patientId.toString());
+          if (patient) {
+            aptObj.patientInfo = {
+              _id: patient._id,
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              phone: patient.phone,
+              gender: patient.gender,
+              dateOfBirth: patient.dateOfBirth,
+              profilePhoto: patient.profilePhoto
+            };
+          }
+        } catch (err) {
+          console.error(`Failed to fetch patient for appointment ${apt._id}:`, err.message);
+          aptObj.patientInfo = null;
+        }
+        return aptObj;
+      })
+    );
+
     const totalAppointments = await Appointment.countDocuments(query);
     const totalPages = Math.ceil(totalAppointments / parseInt(limit));
 
     res.status(200).json({
-      appointments,
+      appointments: appointmentsWithPatientInfo,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -682,7 +719,21 @@ export const requestReschedule = async (req, res, next) => {
 
     res.status(200).json({
       message: 'Reschedule request sent. Waiting for doctor approval.',
-      rescheduleRequest: appointment.rescheduleRequest
+      rescheduleRequest: appointment.rescheduleRequest,
+      appointment: {
+        id: appointment._id,
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
+        appointmentDate: appointment.appointmentDate,
+        appointmentTime: appointment.appointmentTime,
+        status: appointment.status,
+        type: appointment.type,
+        reason: appointment.reason,
+        notes: appointment.notes,
+        rescheduleRequest: appointment.rescheduleRequest,
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt
+      }
     });
   } catch (error) {
     next(error);
@@ -768,12 +819,24 @@ export const approveReschedule = async (req, res, next) => {
       message: 'Reschedule request approved. Appointment updated.',
       appointment: {
         id: appointment._id,
-        previousDate,
-        previousTime,
-        newDate: appointment.appointmentDate,
-        newTime: appointment.appointmentTime,
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
+        appointmentDate: appointment.appointmentDate,
+        appointmentTime: appointment.appointmentTime,
         status: appointment.status,
-        rescheduleCount: appointment.rescheduleCount
+        type: appointment.type,
+        reason: appointment.reason,
+        notes: appointment.notes,
+        isRescheduled: appointment.isRescheduled,
+        rescheduledBy: appointment.rescheduledBy,
+        rescheduledAt: appointment.rescheduledAt,
+        previousDate: appointment.previousDate,
+        previousTime: appointment.previousTime,
+        rescheduleReason: appointment.rescheduleReason,
+        rescheduleCount: appointment.rescheduleCount,
+        rescheduleRequest: appointment.rescheduleRequest,
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt
       }
     });
   } catch (error) {
@@ -827,9 +890,17 @@ export const rejectReschedule = async (req, res, next) => {
       message: 'Reschedule request rejected',
       appointment: {
         id: appointment._id,
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
         appointmentDate: appointment.appointmentDate,
         appointmentTime: appointment.appointmentTime,
-        status: appointment.status
+        status: appointment.status,
+        type: appointment.type,
+        reason: appointment.reason,
+        notes: appointment.notes,
+        rescheduleRequest: appointment.rescheduleRequest,
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt
       }
     });
   } catch (error) {
@@ -891,7 +962,16 @@ export const cancelAppointment = async (req, res, next) => {
     );
 
     res.status(200).json({
-      message: 'Appointment cancelled successfully'
+      message: 'Appointment cancelled successfully',
+      appointment: {
+        id: appointment._id,
+        status: appointment.status,
+        appointmentDate: appointment.appointmentDate,
+        appointmentTime: appointment.appointmentTime,
+        cancellationReason: appointment.cancellationReason,
+        cancelledBy: appointment.cancelledBy,
+        cancelledAt: appointment.cancelledAt
+      }
     });
   } catch (error) {
     next(error);
@@ -925,6 +1005,19 @@ export const getAppointmentDetails = async (req, res, next) => {
 
     // Convert to object for adding extra info
     const appointmentData = appointment.toObject();
+
+    // Generate signed URLs for attached documents
+    if (appointmentData.attachedDocuments && appointmentData.attachedDocuments.length > 0) {
+      appointmentData.attachedDocuments = await Promise.all(
+        appointmentData.attachedDocuments.map(async (doc) => {
+          const signedUrl = await getSignedDocumentUrl(doc.s3Key || doc.s3Url, 3600);
+          return {
+            ...doc,
+            url: signedUrl || doc.s3Url,
+          };
+        })
+      );
+    }
 
     // Populate doctor info for patient, or patient info for doctor
     if (isPatient) {
@@ -1151,6 +1244,30 @@ export const completeAppointment = async (req, res, next) => {
         'Only confirmed appointments can be marked as completed.');
     }
 
+    // Calculate appointment end time and check if it has passed
+    const appointmentDateTime = new Date(appointment.appointmentDate);
+    const [hours, minutes] = appointment.appointmentTime.split(':').map(Number);
+    appointmentDateTime.setHours(hours, minutes, 0, 0);
+    
+    // Add duration to get end time
+    const appointmentEndTime = new Date(appointmentDateTime.getTime() + (appointment.duration || 30) * 60 * 1000);
+    const now = new Date();
+
+    if (now < appointmentEndTime) {
+      // Format date in a user-friendly way
+      const formattedEndTime = appointmentEndTime.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      return sendError(res, 400, 'APPOINTMENT_NOT_ENDED',
+        `Cannot complete appointment before its scheduled end time. The appointment ends at ${formattedEndTime}.`);
+    }
+
     appointment.status = 'completed';
     appointment.completedAt = new Date();
 
@@ -1190,6 +1307,18 @@ export const referralBooking = async (req, res, next) => {
       referralId,
       notes
     } = req.body;
+
+    // Verify the referring doctor has an existing appointment/relationship with this patient
+    const existingAppointment = await Appointment.findOne({
+      doctorId: referringDoctorId,
+      patientId: patientId,
+      status: { $in: ['confirmed', 'completed'] }
+    });
+
+    if (!existingAppointment) {
+      return sendError(res, 403, 'NO_PATIENT_RELATIONSHIP',
+        'You can only refer patients you have previously seen or have confirmed appointments with.');
+    }
 
     // Verify target doctor exists
     const doctor = await fetchDoctorProfile(targetDoctorId);
@@ -1477,10 +1606,84 @@ export const getAppointmentDocuments = async (req, res, next) => {
         'You do not have access to this appointment.');
     }
 
+    // Generate signed URLs for all documents
+    const documentsWithSignedUrls = await Promise.all(
+      appointment.attachedDocuments.map(async (doc) => {
+        const docObj = doc.toObject ? doc.toObject() : doc;
+        // Generate signed URL for the document
+        const signedUrl = await getSignedDocumentUrl(docObj.s3Key || docObj.s3Url, 3600);
+        return {
+          ...docObj,
+          url: signedUrl || docObj.s3Url, // Use signed URL, fallback to s3Url
+        };
+      })
+    );
+
     res.status(200).json({
       appointmentId,
-      documents: appointment.attachedDocuments,
+      documents: documentsWithSignedUrls,
       totalDocuments: appointment.attachedDocuments.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Upload document file for appointment
+ * POST /api/v1/appointments/upload-document
+ * Uploads file to S3 and returns the URL
+ */
+export const uploadDocumentFile = async (req, res, next) => {
+  try {
+    const { profileId, role } = req.user;
+    const { appointmentId } = req.body;
+
+    // Verify file is present
+    if (!req.file) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'No file provided.');
+    }
+
+    // Verify appointmentId is present
+    if (!appointmentId) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Appointment ID is required.');
+    }
+
+    // Find appointment
+    const appointment = await Appointment.findById(appointmentId);
+
+    if (!appointment) {
+      return sendError(res, 404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+    }
+
+    // Verify patient owns this appointment
+    if (role === 'patient' && appointment.patientId.toString() !== profileId.toString()) {
+      return sendError(res, 403, 'FORBIDDEN', 'You can only upload documents to your own appointments.');
+    }
+
+    // Verify doctor owns this appointment
+    if (role === 'doctor' && appointment.doctorId.toString() !== profileId.toString()) {
+      return sendError(res, 403, 'FORBIDDEN', 'You can only upload documents to your own appointments.');
+    }
+
+    // Only allow uploads to pending or confirmed appointments
+    if (!['pending', 'confirmed'].includes(appointment.status)) {
+      return sendError(res, 400, 'INVALID_STATUS', 'Documents can only be added to pending or confirmed appointments.');
+    }
+
+    // Upload to S3
+    const uploadResult = await uploadDocumentToS3(req.file, appointmentId);
+
+    // Generate a signed URL for immediate access
+    const signedUrl = await getSignedDocumentUrl(uploadResult.s3Key, 3600);
+
+    res.status(200).json({
+      message: 'File uploaded successfully.',
+      url: signedUrl || uploadResult.s3Url,
+      s3Key: uploadResult.s3Key,
+      fileName: uploadResult.fileName,
+      fileSize: uploadResult.fileSize,
+      mimeType: uploadResult.mimeType
     });
   } catch (error) {
     next(error);

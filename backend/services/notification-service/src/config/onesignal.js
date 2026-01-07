@@ -1,26 +1,28 @@
-import * as OneSignal from 'onesignal-node';
+import * as OneSignal from '@onesignal/node-onesignal';
 import { getConfig } from '../../../../shared/index.js';
 
 let oneSignalClient = null;
+let oneSignalAppId = null;
 
 export const initializeOneSignal = () => {
-  const userAuthKey = getConfig('ONESIGNAL_USER_AUTH_KEY');
   const appAuthKey = getConfig('ONESIGNAL_REST_API_KEY');
-  const appId = getConfig('ONESIGNAL_APP_ID');
+  oneSignalAppId = getConfig('ONESIGNAL_APP_ID');
 
-  if (!userAuthKey || !appAuthKey || !appId) {
+  if (!appAuthKey || !oneSignalAppId) {
     console.warn('⚠️ OneSignal credentials missing. Push notifications will happen in dry-run mode (if handled) or fail.');
+    console.warn('  ONESIGNAL_REST_API_KEY:', appAuthKey ? 'set' : 'missing');
+    console.warn('  ONESIGNAL_APP_ID:', oneSignalAppId ? 'set' : 'missing');
+    return null;
   }
 
-  oneSignalClient = new OneSignal.Client({
-    userAuthKey: userAuthKey || 'missing_key',
-    app: {
-      appAuthKey: appAuthKey || 'missing_key',
-      appId: appId || 'missing_id',
-    },
+  // Create configuration with the new SDK
+  const configuration = OneSignal.createConfiguration({
+    restApiKey: appAuthKey,
   });
 
-  console.log('✅ OneSignal client initialized');
+  oneSignalClient = new OneSignal.DefaultApi(configuration);
+
+  console.log('✅ OneSignal client initialized with App ID:', oneSignalAppId);
   return oneSignalClient;
 };
 
@@ -31,5 +33,7 @@ export const getOneSignalClient = () => {
   }
   return oneSignalClient;
 };
+
+export const getOneSignalAppId = () => oneSignalAppId;
 
 export default getOneSignalClient;

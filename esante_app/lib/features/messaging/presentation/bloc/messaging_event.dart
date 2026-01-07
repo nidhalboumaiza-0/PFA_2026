@@ -16,15 +16,17 @@ class LoadConversations extends MessagingEvent {
   final String? type;
   final int page;
   final bool refresh;
+  final bool forceEmit; // Force emit ConversationsLoaded even if in MessagesLoaded state
 
   const LoadConversations({
     this.type,
     this.page = 1,
     this.refresh = false,
+    this.forceEmit = false,
   });
 
   @override
-  List<Object?> get props => [type, page, refresh];
+  List<Object?> get props => [type, page, refresh, forceEmit];
 }
 
 /// Create or get a conversation with a user
@@ -104,17 +106,19 @@ class SendTextMessage extends MessagingEvent {
 /// Send a file message
 class SendFileMessage extends MessagingEvent {
   final String conversationId;
+  final String receiverId;
   final File file;
   final String? caption;
 
   const SendFileMessage({
     required this.conversationId,
+    required this.receiverId,
     required this.file,
     this.caption,
   });
 
   @override
-  List<Object?> get props => [conversationId, file.path, caption];
+  List<Object?> get props => [conversationId, receiverId, file.path, caption];
 }
 
 /// Mark messages as read

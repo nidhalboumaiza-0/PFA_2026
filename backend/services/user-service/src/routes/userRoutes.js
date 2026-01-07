@@ -24,7 +24,8 @@ router.get('/doctors/search', userController.searchDoctors);
 router.get('/doctors/nearby', userController.getNearbyDoctors);
 router.get('/doctors/:doctorId', userController.getDoctorById);
 
-// Internal service-to-service endpoints (for rdv-service, notification-service, etc.)
+// Internal service-to-service endpoints (for rdv-service, notification-service, messaging-service, etc.)
+router.get('/profile/:profileId', userController.getProfileById);
 router.get('/patients/:patientId', userController.getPatientById);
 
 // Admin endpoints

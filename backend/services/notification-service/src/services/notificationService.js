@@ -304,9 +304,11 @@ export const updatePreferences = async (userId, preferencesData) => {
  * @returns {Promise<object>} - Result
  */
 export const registerDevice = async (userId, deviceData) => {
+  console.log(`📱 Registering device for user ${userId}:`, deviceData);
   const preferences = await getNotificationPreferences(userId);
   const result = preferences.addDevice(deviceData);
   await preferences.save();
+  console.log(`📱 Device registration result for user ${userId}:`, result);
   return result;
 };
 

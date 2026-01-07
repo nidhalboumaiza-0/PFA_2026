@@ -442,6 +442,7 @@ services:
       - NODE_ENV=development
       - CONSUL_HOST=consul
       - CONSUL_PORT=8500
+      - SERVICE_HOST=audit-service
       # Fallback values - used only if Consul unavailable
       - PORT=3008
       - MONGODB_URI=mongodb://admin:password@mongodb:27017/esante_audit?authSource=admin

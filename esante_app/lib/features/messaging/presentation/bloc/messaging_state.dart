@@ -25,25 +25,29 @@ class ConversationsLoaded extends MessagingState {
   final List<ConversationEntity> conversations;
   final bool hasMore;
   final int currentPage;
+  final DateTime? lastUpdated; // Force state change detection
 
   const ConversationsLoaded({
     required this.conversations,
     this.hasMore = true,
     this.currentPage = 1,
+    this.lastUpdated,
   });
 
   @override
-  List<Object?> get props => [conversations, hasMore, currentPage];
+  List<Object?> get props => [conversations, hasMore, currentPage, lastUpdated];
 
   ConversationsLoaded copyWith({
     List<ConversationEntity>? conversations,
     bool? hasMore,
     int? currentPage,
+    DateTime? lastUpdated,
   }) {
     return ConversationsLoaded(
       conversations: conversations ?? this.conversations,
       hasMore: hasMore ?? this.hasMore,
       currentPage: currentPage ?? this.currentPage,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
 }

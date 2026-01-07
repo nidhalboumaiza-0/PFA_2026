@@ -25,8 +25,9 @@ const requestAppointmentSchema = Joi.object({
   doctorId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().messages({
     'string.pattern.base': 'Invalid doctor ID format'
   }),
-  appointmentDate: Joi.date().min('now').required().messages({
-    'date.min': 'Appointment date must be in the future'
+  // Allow today's date (compare dates only, not times)
+  appointmentDate: Joi.date().min(new Date().setHours(0, 0, 0, 0)).required().messages({
+    'date.min': 'Appointment date must be today or in the future'
   }),
   appointmentTime: Joi.string().pattern(/^([01]\d|2[0-3]):([0-5]\d)$/).required().messages({
     'string.pattern.base': 'Time must be in HH:MM format'
@@ -70,7 +71,7 @@ const referralBookingSchema = Joi.object({
   targetDoctorId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required(),
   appointmentDate: Joi.date().min('now').required(),
   appointmentTime: Joi.string().pattern(/^([01]\d|2[0-3]):([0-5]\d)$/).required(),
-  referralId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required(),
+  referralId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).allow(null, ''),
   notes: Joi.string().max(1000).allow('', null)
 });
 

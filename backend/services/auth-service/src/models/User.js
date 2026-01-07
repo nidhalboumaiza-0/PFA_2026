@@ -1,4 +1,4 @@
-import { mongoose } from '../../../../shared/index.js';
+import { mongoose, getConfig } from '../../../../shared/index.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -79,8 +79,8 @@ userSchema.methods.generateAccessToken = function () {
       profileId: this.profileId,
       type: 'access'
     },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || '1d' }
+    getConfig('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production'),
+    { expiresIn: getConfig('JWT_EXPIRE', '1d') }
   );
 };
 
@@ -91,8 +91,8 @@ userSchema.methods.generateRefreshToken = function () {
       id: this._id,
       type: 'refresh'
     },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRE || '30d' }
+    getConfig('JWT_REFRESH_SECRET', 'your-super-secret-refresh-key'),
+    { expiresIn: getConfig('JWT_REFRESH_EXPIRE', '30d') }
   );
 };
 
@@ -106,7 +106,7 @@ userSchema.methods.generateEmailVerificationToken = function () {
       id: this._id,
       purpose: 'email-verification'
     },
-    process.env.JWT_SECRET,
+    getConfig('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production'),
     { expiresIn: '24h' }
   );
 

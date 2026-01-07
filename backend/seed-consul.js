@@ -76,7 +76,8 @@ async function seedConfiguration() {
     'esante/common/LOG_LEVEL': 'info',
 
     // === JWT Configuration (shared by all services) ===
-    'esante/common/JWT_SECRET': "sfjklbslkbrnsklnfgsmnomqslnlfknmlqkfq5r4fqs54gs5q4'e_\"-ac(ee'\"aceè('e_ca\"())",
+    // IMPORTANT: Must match docker-compose JWT_SECRET env var
+    'esante/common/JWT_SECRET': 'your-super-secret-jwt-key-change-in-production',
     'esante/common/JWT_EXPIRE': '1d',
     'esante/common/JWT_REFRESH_SECRET': 'your_super_secret_refresh_key_change_in_production',
     'esante/common/JWT_REFRESH_EXPIRE': '30d',
@@ -98,7 +99,7 @@ async function seedConfiguration() {
 
     // === AWS S3 Configuration ===
     'esante/common/AWS_REGION': 'eu-north-1',
-
+   
     'esante/common/AWS_S3_BUCKET': 'esante-medical-documents',
 
     // === Email/SMTP Configuration ===
@@ -113,9 +114,8 @@ async function seedConfiguration() {
     'esante/common/EMAIL_PASSWORD': 'lgwc oqaf vqfw budl',
 
     // === OneSignal Push Notifications ===
-    'esante/common/ONESIGNAL_APP_ID': 'c337b164-017f-48ed-9b27-a2c7d90dee46',
-    'esante/common/ONESIGNAL_REST_API_KEY': 't5t6xinqeeywmjkw5fxyjhtih',
-    'esante/common/ONESIGNAL_USER_AUTH_KEY': 'os_v2_app_ym33czabp5eo3gzhuld5sdpoiyt5t6xinqeeywmjkw5fxyjhtiht6a6o5lyoxeex6ub6qeyxrbhxn3kfmaa777zqf4lugfwdhou54ii',
+    'esante/common/ONESIGNAL_APP_ID': 'b7f38ec8-6bd1-468b-bf40-8bd991871561',
+    'esante/common/ONESIGNAL_REST_API_KEY': 'os_v2_app_w7zy5sdl2fdixp2arpmzdbyvmhswk2ajua3ew4ucclozuixmlghmmpk22kucdsp22hrqclpm4va2uadpxvd3gvrkz6rcenxr3zu2veq',
 
     // === URLs (for inter-service communication) ===
     'esante/common/FRONTEND_URL': 'http://192.168.0.127:3000',

@@ -889,11 +889,65 @@ export const getReferralStatistics = async (req, res, next) => {
   try {
     const { profileId: doctorId, role } = req.user;
 
-    if (role !== 'doctor') {
+    // Allow both doctors and admins
+    if (role !== 'doctor' && role !== 'admin') {
       return sendError(res, 403, 'FORBIDDEN',
-        'Only doctors can view referral statistics.');
+        'Only doctors and admins can view referral statistics.');
     }
 
+    // Admin statistics - global overview
+    if (role === 'admin') {
+      const [
+        totalReferrals,
+        pending,
+        scheduled,
+        completed,
+        rejected,
+        cancelled,
+        recentReferrals,
+        byPriority,
+        bySpecialty
+      ] = await Promise.all([
+        Referral.countDocuments(),
+        Referral.countDocuments({ status: 'pending' }),
+        Referral.countDocuments({ status: 'scheduled' }),
+        Referral.countDocuments({ status: 'completed' }),
+        Referral.countDocuments({ status: 'rejected' }),
+        Referral.countDocuments({ status: 'cancelled' }),
+        Referral.find()
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .lean(),
+        Referral.aggregate([
+          { $group: { _id: '$priority', count: { $sum: 1 } } }
+        ]),
+        Referral.aggregate([
+          { $group: { _id: '$specialty', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 5 }
+        ])
+      ]);
+
+      return res.status(200).json({
+        totalReferrals,
+        pending,
+        scheduled,
+        completed,
+        rejected,
+        cancelled,
+        recentReferrals,
+        byPriority: byPriority.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        topSpecialties: bySpecialty.map(item => ({
+          specialty: item._id,
+          count: item.count
+        }))
+      });
+    }
+
+    // Doctor statistics - existing logic
     // Check if doctor is referring or receiving referrals
     const isReferringDoctor = await Referral.exists({ referringDoctorId: doctorId });
     const isTargetDoctor = await Referral.exists({ targetDoctorId: doctorId });

@@ -476,12 +476,15 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
     final stats = response['statistics'] as Map<String, dynamic>?;
     if (stats == null) return const AppointmentStatistics();
 
+    _log('getAppointmentStatistics', 'Raw stats: $stats');
+
     return AppointmentStatistics(
       totalAppointments: stats['totalAppointments'] ?? 0,
-      pendingCount: stats['pendingCount'] ?? 0,
-      confirmedCount: stats['confirmedCount'] ?? 0,
-      completedCount: stats['completedCount'] ?? 0,
-      cancelledCount: stats['cancelledCount'] ?? 0,
+      // Backend returns 'pending', 'confirmed', etc. NOT 'pendingCount'
+      pendingCount: stats['pendingCount'] ?? stats['pending'] ?? 0,
+      confirmedCount: stats['confirmedCount'] ?? stats['confirmed'] ?? 0,
+      completedCount: stats['completedCount'] ?? stats['completed'] ?? 0,
+      cancelledCount: stats['cancelledCount'] ?? stats['cancelled'] ?? 0,
       todayAppointments: stats['todayAppointments'] ?? 0,
       weekAppointments: stats['weekAppointments'] ?? 0,
     );
@@ -503,12 +506,13 @@ class AppointmentRemoteDataSourceImpl implements AppointmentRemoteDataSource {
       ApiList.doctorReferralBooking,
       data: {
         'patientId': patientId,
-        'doctorId': specialistDoctorId,
+        'targetDoctorId': specialistDoctorId,
         'appointmentDate': appointmentDate.toIso8601String(),
         'appointmentTime': appointmentTime,
-        'reason': reason,
         if (referralId != null) 'referralId': referralId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        // reason is stored in notes if provided
+        if (reason.isNotEmpty && (notes == null || notes.isEmpty)) 'notes': reason,
       },
     );
 

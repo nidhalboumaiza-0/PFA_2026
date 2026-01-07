@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/services/messaging_socket_service.dart';
+import '../../../../core/storage/hive_storage_service.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../data/models/message_model.dart';
 import '../../domain/entities/conversation_entity.dart';
@@ -28,13 +29,13 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
   List<ConversationEntity> _conversations = [];
   Map<String, List<MessageEntity>> _messagesCache = {};
   int _unreadCount = 0;
+  String? _cachedUserId;
 
   // Socket subscription
   StreamSubscription<MessagingSocketEvent>? _socketSubscription;
 
   // Current conversation context for typing
   String? _currentConversationId;
-  String? _currentReceiverId;
 
   MessagingBloc({
     required this.getConversationsUseCase,
@@ -62,6 +63,7 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     on<UserOffline>(_onUserOffline);
     on<ClearCurrentConversation>(_onClearCurrentConversation);
     on<ResetMessaging>(_onResetMessaging);
+    on<MessageSentConfirmation>(_onMessageSentConfirmation);
 
     // Subscribe to socket events
     _subscribeToSocket();
@@ -73,9 +75,14 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
 
   /// Subscribe to socket events
   void _subscribeToSocket() {
-    if (messagingSocketService == null) return;
+    if (messagingSocketService == null) {
+      _log('_subscribeToSocket', '❌ messagingSocketService is NULL!');
+      return;
+    }
 
+    _log('_subscribeToSocket', '✅ Subscribing to socket events...');
     _socketSubscription = messagingSocketService!.eventStream.listen((event) {
+      _log('_subscribeToSocket', '📨 Received socket event: ${event.type}');
       switch (event.type) {
         case MessagingSocketEventType.newMessage:
           if (event.data != null) {
@@ -116,6 +123,22 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
             add(LoadMessages(conversationId: _currentConversationId!, refresh: true));
           }
           break;
+        case MessagingSocketEventType.messageSent:
+          // Handle message sent confirmation
+          if (event.data != null) {
+            _log('_subscribeToSocket', 'Message sent confirmed: ${event.data}');
+            add(MessageSentConfirmation(
+              tempId: event.data!['tempId'] ?? '',
+              messageData: event.data!,
+            ));
+          }
+          break;
+        case MessagingSocketEventType.messageDelivered:
+          // Message was delivered to recipient, could update UI
+          if (event.data != null) {
+            _log('_subscribeToSocket', 'Message delivered: ${event.data}');
+          }
+          break;
         default:
           break;
       }
@@ -128,15 +151,57 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
   /// Get cached unread count
   int get unreadCount => _unreadCount;
 
+  /// Helper to update a conversation's lastMessage in the cache
+  void _updateConversationLastMessage({
+    required String conversationId,
+    required String content,
+    required String senderId,
+    required DateTime timestamp,
+    bool incrementUnread = false,
+  }) {
+    final convIndex = _conversations.indexWhere((c) => c.id == conversationId);
+    _log('_updateConversationLastMessage', 'Looking for conversation $conversationId, found at index: $convIndex');
+    
+    if (convIndex != -1) {
+      final oldConv = _conversations[convIndex];
+      final newUnreadCount = incrementUnread ? oldConv.unreadCount + 1 : oldConv.unreadCount;
+      _log('_updateConversationLastMessage', 'Old unreadCount: ${oldConv.unreadCount}, incrementUnread: $incrementUnread, new unreadCount: $newUnreadCount');
+      
+      final updatedConv = oldConv.copyWith(
+        unreadCount: newUnreadCount,
+        lastMessage: LastMessageEntity(
+          content: content,
+          senderId: senderId,
+          timestamp: timestamp,
+          isRead: !incrementUnread,
+        ),
+        updatedAt: timestamp,
+      );
+      
+      _log('_updateConversationLastMessage', 'Updated conversation unreadCount: ${updatedConv.unreadCount}, hasUnread: ${updatedConv.hasUnread}');
+      
+      // Remove old and insert updated at correct position
+      _conversations.removeAt(convIndex);
+      _conversations.insert(0, updatedConv); // Always move to top
+      
+      _log('_updateConversationLastMessage', 'Moved conversation to top. First conversation unreadCount: ${_conversations[0].unreadCount}');
+    } else {
+      _log('_updateConversationLastMessage', 'Conversation not found in cache!');
+    }
+  }
+
   // ============== Conversation Handlers ==============
 
   Future<void> _onLoadConversations(
     LoadConversations event,
     Emitter<MessagingState> emit,
   ) async {
-    _log('_onLoadConversations', 'Loading conversations (page: ${event.page}, refresh: ${event.refresh})');
+    _log('_onLoadConversations', 'Loading conversations (page: ${event.page}, refresh: ${event.refresh}, forceEmit: ${event.forceEmit})');
 
-    if (event.refresh || _conversations.isEmpty) {
+    // Only show loading if we have NO cached conversations
+    // This prevents flicker when refreshing with existing data
+    final currentState = state;
+    if (_conversations.isEmpty && (currentState is! MessagesLoaded || event.forceEmit)) {
       emit(const ConversationsLoading());
     }
 
@@ -151,7 +216,11 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     result.fold(
       (failure) {
         _log('_onLoadConversations', 'Failed: ${failure.message}');
-        emit(ConversationsError(message: failure.message));
+        // Don't emit error if we're in MessagesLoaded state (unless forceEmit)
+        final currentState = state;
+        if (currentState is! MessagesLoaded || event.forceEmit) {
+          emit(ConversationsError(message: failure.message));
+        }
       },
       (conversations) {
         _log('_onLoadConversations', 'Success: ${conversations.length} conversations');
@@ -162,11 +231,20 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
           _conversations = [..._conversations, ...conversations];
         }
 
-        emit(ConversationsLoaded(
-          conversations: _conversations,
-          hasMore: conversations.length >= 20,
-          currentPage: event.page,
-        ));
+        // Don't emit ConversationsLoaded if we're in MessagesLoaded state
+        // This preserves the chat state for typing/message updates
+        // Unless forceEmit is true (conversations screen needs update)
+        final currentState = state;
+        if (currentState is MessagesLoaded && !event.forceEmit) {
+          _log('_onLoadConversations', 'Preserving MessagesLoaded state, not emitting ConversationsLoaded');
+          // Just update the cached conversations, don't change state
+        } else {
+          emit(ConversationsLoaded(
+            conversations: _conversations,
+            hasMore: conversations.length >= 20,
+            currentPage: event.page,
+          ));
+        }
       },
     );
   }
@@ -234,13 +312,21 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
       (messages) {
         _log('_onLoadMessages', 'Success: ${messages.length} messages');
 
+        // Sort messages newest-first (descending by createdAt) for reverse ListView
+        final sortedMessages = List<MessageEntity>.from(messages)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
         if (event.refresh || event.page == 1) {
-          _messagesCache[event.conversationId] = messages;
+          _messagesCache[event.conversationId] = sortedMessages;
         } else {
-          _messagesCache[event.conversationId] = [
+          // For pagination, add older messages at the end
+          final allMessages = <MessageEntity>[
             ...(_messagesCache[event.conversationId] ?? []),
-            ...messages,
+            ...sortedMessages,
           ];
+          // Re-sort to ensure correct order
+          allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _messagesCache[event.conversationId] = allMessages;
         }
 
         // Find conversation for context
@@ -285,10 +371,13 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
         (messages) {
           _log('_onLoadMoreMessages', 'Success: ${messages.length} more messages');
 
-          _messagesCache[event.conversationId] = [
+          // Combine and sort all messages newest-first
+          final allMessages = <MessageEntity>[
             ...(_messagesCache[event.conversationId] ?? []),
             ...messages,
           ];
+          allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _messagesCache[event.conversationId] = allMessages;
 
           emit(currentState.copyWith(
             messages: _messagesCache[event.conversationId],
@@ -307,11 +396,47 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     _log('_onSendFileMessage', 'Sending file to ${event.conversationId}');
 
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-    emit(MessageSending(conversationId: event.conversationId, tempId: tempId));
+    final currentUserId = await _getCurrentUserId();
+    
+    // Determine message type based on file extension
+    final extension = event.file.path.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(extension);
+    final messageType = isImage ? MessageType.image : MessageType.document;
+    
+    // Create optimistic message with local file path
+    final optimisticMessage = MessageEntity(
+      id: 'temp_$tempId',
+      conversationId: event.conversationId,
+      senderId: currentUserId,
+      senderType: 'user',
+      receiverId: event.receiverId,
+      receiverType: 'user',
+      messageType: messageType,
+      content: event.file.path, // Use local file path for preview
+      isDelivered: false,
+      isRead: false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      metadata: {'uploading': true, 'tempId': tempId}, // Mark as uploading
+    );
+
+    // Add optimistic message to state and cache
+    final currentState = state;
+    if (currentState is MessagesLoaded) {
+      final updatedMessages = [optimisticMessage, ...currentState.messages];
+      _messagesCache[event.conversationId] = updatedMessages;
+      emit(currentState.copyWith(messages: updatedMessages));
+    } else {
+      _messagesCache[event.conversationId] = [
+        optimisticMessage,
+        ...(_messagesCache[event.conversationId] ?? []),
+      ];
+    }
 
     final result = await sendFileMessageUseCase(
       SendFileMessageParams(
         conversationId: event.conversationId,
+        receiverId: event.receiverId,
         file: event.file,
         caption: event.caption,
       ),
@@ -320,6 +445,15 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     result.fold(
       (failure) {
         _log('_onSendFileMessage', 'Failed: ${failure.message}');
+        // Remove optimistic message on failure
+        final currentState = state;
+        if (currentState is MessagesLoaded) {
+          final messagesWithoutOptimistic = currentState.messages
+              .where((m) => m.id != 'temp_$tempId')
+              .toList();
+          _messagesCache[event.conversationId] = messagesWithoutOptimistic;
+          emit(currentState.copyWith(messages: messagesWithoutOptimistic));
+        }
         emit(MessageSendError(
           conversationId: event.conversationId,
           message: failure.message,
@@ -329,18 +463,21 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
       (message) {
         _log('_onSendFileMessage', 'Success: ${message.id}');
         
-        // Add message to cache
-        if (_messagesCache.containsKey(event.conversationId)) {
-          _messagesCache[event.conversationId] = [
-            message,
-            ...(_messagesCache[event.conversationId] ?? []),
-          ];
+        // Replace optimistic message with real message
+        final currentState = state;
+        if (currentState is MessagesLoaded) {
+          final updatedMessages = currentState.messages.map((m) {
+            if (m.id == 'temp_$tempId') {
+              return message; // Replace with real message from server
+            }
+            return m;
+          }).toList();
+          _messagesCache[event.conversationId] = updatedMessages;
+          emit(currentState.copyWith(messages: updatedMessages));
         }
-
-        emit(MessageSent(message: message, tempId: tempId));
         
-        // Reload messages to show the new one
-        add(LoadMessages(conversationId: event.conversationId, refresh: true));
+        // Refresh conversations to update last message preview
+        add(const LoadConversations(refresh: true));
       },
     );
   }
@@ -350,6 +487,13 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     Emitter<MessagingState> emit,
   ) async {
     _log('_onMarkMessagesRead', 'Marking messages as read for ${event.conversationId}');
+
+    // Immediately update local cache for responsive UI
+    final index = _conversations.indexWhere((c) => c.id == event.conversationId);
+    if (index != -1) {
+      _conversations[index] = _conversations[index].copyWith(unreadCount: 0);
+      _log('_onMarkMessagesRead', 'Immediately updated local cache for conversation');
+    }
 
     final result = await markMessagesReadUseCase(
       MarkMessagesReadParams(conversationId: event.conversationId),
@@ -361,13 +505,6 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
       },
       (_) {
         _log('_onMarkMessagesRead', 'Success');
-        
-        // Update conversation unread count
-        final index = _conversations.indexWhere((c) => c.id == event.conversationId);
-        if (index != -1) {
-          // Refresh conversations to get updated unread counts
-          add(const LoadConversations(refresh: true));
-        }
 
         // Refresh unread count
         add(const GetUnreadCount());
@@ -392,7 +529,15 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
       (count) {
         _log('_onGetUnreadCount', 'Success: $count');
         _unreadCount = count;
-        emit(UnreadCountLoaded(count: count));
+        // Don't emit UnreadCountLoaded if we're in MessagesLoaded state
+        // This preserves the chat state and allows typing/message updates
+        final currentState = state;
+        if (currentState is MessagesLoaded) {
+          _log('_onGetUnreadCount', 'Preserving MessagesLoaded state');
+          // Keep the current state, just update the cached count
+        } else {
+          emit(UnreadCountLoaded(count: count));
+        }
       },
     );
   }
@@ -403,7 +548,11 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
   ) {
     _log('_onUpdateUnreadCount', 'Updating unread count to ${event.count}');
     _unreadCount = event.count;
-    emit(UnreadCountLoaded(count: event.count));
+    // Don't emit if we're in MessagesLoaded state to preserve chat state
+    final currentState = state;
+    if (currentState is! MessagesLoaded) {
+      emit(UnreadCountLoaded(count: event.count));
+    }
   }
 
   // ============== Socket Event Handlers ==============
@@ -412,35 +561,77 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     MessageReceived event,
     Emitter<MessagingState> emit,
   ) {
-    _log('_onMessageReceived', 'Message received');
+    _log('_onMessageReceived', '📥 Message received: ${event.messageData}');
 
     try {
       final message = MessageModel.fromJson(event.messageData);
+      _log('_onMessageReceived', '📥 Parsed message for conversation: ${message.conversationId}');
       
-      // Add to cache if conversation is loaded
-      if (_messagesCache.containsKey(message.conversationId)) {
+      // Update cache - create if doesn't exist
+      if (!_messagesCache.containsKey(message.conversationId)) {
+        _messagesCache[message.conversationId] = [];
+      }
+      
+      // Check if message already exists (avoid duplicates)
+      final existingIndex = _messagesCache[message.conversationId]!
+          .indexWhere((m) => m.id == message.id);
+      if (existingIndex == -1) {
+        // Add new message at the beginning (newest first)
         _messagesCache[message.conversationId] = [
           message.toEntity(),
           ...(_messagesCache[message.conversationId] ?? []),
         ];
+        _log('_onMessageReceived', '📥 Added message to cache');
+      } else {
+        _log('_onMessageReceived', '📥 Message already exists in cache, skipping');
+        return; // Don't process duplicate
+      }
 
-        // Emit updated state if we're viewing this conversation
-        final currentState = state;
-        if (currentState is MessagesLoaded &&
-            currentState.conversationId == message.conversationId) {
-          emit(currentState.copyWith(
-            messages: _messagesCache[message.conversationId],
+      // Check if we're currently viewing this conversation
+      final currentState = state;
+      final isViewingThisConversation = currentState is MessagesLoaded &&
+          currentState.conversationId == message.conversationId;
+      
+      _log('_onMessageReceived', '📥 Current state: ${currentState.runtimeType}, isViewingThisConversation: $isViewingThisConversation');
+
+      // Always update the conversation's lastMessage in cache
+      _updateConversationLastMessage(
+        conversationId: message.conversationId,
+        content: message.content ?? 'File attachment',
+        senderId: message.senderId,
+        timestamp: message.createdAt,
+        incrementUnread: !isViewingThisConversation, // Only increment unread if not viewing
+      );
+      
+      if (isViewingThisConversation) {
+        // We're viewing this conversation - update the messages
+        _log('_onMessageReceived', '📥 Emitting updated state with ${_messagesCache[message.conversationId]!.length} messages');
+        emit(currentState.copyWith(
+          messages: _messagesCache[message.conversationId],
+        ));
+      } else {
+        // Not viewing this conversation - increment global unread count
+        _log('_onMessageReceived', '📥 Not in this conversation, incrementing unread count');
+        _unreadCount++;
+        
+        // If we're on conversations screen, emit updated list to show new message indicator
+        if (currentState is ConversationsLoaded) {
+          // Verify the first conversation has the updated unread count
+          if (_conversations.isNotEmpty) {
+            _log('_onMessageReceived', '📥 First conversation: ${_conversations[0].displayName}, unreadCount: ${_conversations[0].unreadCount}, lastMessage: ${_conversations[0].lastMessage?.content}');
+          }
+          _log('_onMessageReceived', '📥 Emitting updated ConversationsLoaded with ${_conversations.length} conversations');
+          emit(ConversationsLoaded(
+            conversations: List<ConversationEntity>.from(_conversations),
+            hasMore: currentState.hasMore,
+            currentPage: currentState.currentPage,
+            lastUpdated: DateTime.now(), // Force state change
           ));
         }
       }
-
-      // Increment unread count
-      _unreadCount++;
-      
-      // Refresh conversations to update last message
-      add(const LoadConversations(refresh: true));
-    } catch (e) {
-      _log('_onMessageReceived', 'Error parsing message: $e');
+    } catch (e, stack) {
+      _log('_onMessageReceived', '❌ Error parsing message: $e');
+      _log('_onMessageReceived', '❌ Stack: $stack');
     }
   }
 
@@ -448,15 +639,23 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     TypingIndicatorReceived event,
     Emitter<MessagingState> emit,
   ) {
-    _log('_onTypingIndicatorReceived', 'User ${event.userId} is ${event.isTyping ? 'typing' : 'not typing'}');
+    _log('_onTypingIndicatorReceived', 'User ${event.userId} is ${event.isTyping ? 'typing' : 'not typing'} in conversation ${event.conversationId}');
+    _log('_onTypingIndicatorReceived', 'Current state: ${state.runtimeType}, _currentConversationId: $_currentConversationId');
 
     final currentState = state;
-    if (currentState is MessagesLoaded &&
-        currentState.conversationId == event.conversationId) {
-      emit(currentState.copyWith(
-        isTyping: event.isTyping,
-        typingUserId: event.isTyping ? event.userId : null,
-      ));
+    if (currentState is MessagesLoaded) {
+      _log('_onTypingIndicatorReceived', 'State conversationId: ${currentState.conversationId}, Event conversationId: ${event.conversationId}');
+      if (currentState.conversationId == event.conversationId) {
+        _log('_onTypingIndicatorReceived', 'Emitting typing state: ${event.isTyping}');
+        emit(currentState.copyWith(
+          isTyping: event.isTyping,
+          typingUserId: event.isTyping ? event.userId : null,
+        ));
+      } else {
+        _log('_onTypingIndicatorReceived', 'ConversationId mismatch - not updating');
+      }
+    } else {
+      _log('_onTypingIndicatorReceived', 'State is not MessagesLoaded - cannot update typing');
     }
   }
 
@@ -494,7 +693,6 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
 
     // Set current conversation context
     _currentConversationId = event.conversationId;
-    _currentReceiverId = event.receiverId;
 
     // Stop typing indicator
     messagingSocketService?.stopTyping(
@@ -503,27 +701,86 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     );
 
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-    emit(MessageSending(conversationId: event.conversationId, tempId: tempId));
-
-    // Send via socket for real-time delivery
-    final success = messagingSocketService?.sendMessage(
+    final currentUserId = await _getCurrentUserId();
+    
+    // Create optimistic message to show immediately
+    final optimisticMessage = MessageEntity(
+      id: 'temp_$tempId',
       conversationId: event.conversationId,
+      senderId: currentUserId,
+      senderType: 'user',
       receiverId: event.receiverId,
+      receiverType: 'user',
+      messageType: MessageType.text,
       content: event.content,
-    ) ?? false;
+      isDelivered: false,
+      isRead: false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
 
-    if (success) {
-      _log('_onSendTextMessage', 'Message sent via socket');
-      // The socket will emit new_message or message_sent event
-      // which will trigger MessageReceived and update the UI
+    // Add optimistic message to the current state AND cache (at the beginning since list is reversed)
+    final currentState = state;
+    if (currentState is MessagesLoaded) {
+      final updatedMessages = [optimisticMessage, ...currentState.messages];
+      // Also update the cache to keep it in sync
+      _messagesCache[event.conversationId] = updatedMessages;
+      emit(currentState.copyWith(messages: updatedMessages));
     } else {
+      // If not in MessagesLoaded state, still update cache
+      _messagesCache[event.conversationId] = [
+        optimisticMessage,
+        ...(_messagesCache[event.conversationId] ?? []),
+      ];
+    }
+    
+    // Update the conversation's lastMessage immediately for responsive UI
+    _updateConversationLastMessage(
+      conversationId: event.conversationId,
+      content: event.content,
+      senderId: currentUserId,
+      timestamp: DateTime.now(),
+      incrementUnread: false,
+    );
+
+    // Check if socket is connected
+    if (messagingSocketService?.isConnected != true) {
       _log('_onSendTextMessage', 'Socket not connected, cannot send message');
+      // Remove optimistic message on error from both state and cache
+      if (currentState is MessagesLoaded) {
+        final messagesWithoutOptimistic = currentState.messages
+            .where((m) => m.id != 'temp_$tempId')
+            .toList();
+        _messagesCache[event.conversationId] = messagesWithoutOptimistic;
+        emit(currentState.copyWith(messages: messagesWithoutOptimistic));
+      }
       emit(MessageSendError(
         conversationId: event.conversationId,
         message: 'Not connected to messaging service',
         tempId: tempId,
       ));
+      return;
     }
+
+    // Send via socket for real-time delivery
+    messagingSocketService!.sendMessage(
+      conversationId: event.conversationId,
+      receiverId: event.receiverId,
+      content: event.content,
+      tempId: tempId,
+    );
+    
+    _log('_onSendTextMessage', 'Message sent via socket');
+    // The socket will emit message_sent event which will replace the optimistic message
+  }
+  
+  Future<String> _getCurrentUserId() async {
+    // Check cache first
+    if (_cachedUserId != null) return _cachedUserId!;
+    
+    // Get from HiveStorageService
+    _cachedUserId = HiveStorageService.getCurrentUserId();
+    return _cachedUserId ?? '';
   }
 
   void _onUserOnline(
@@ -569,6 +826,64 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     emit(const MessagingInitial());
   }
 
+  // ============== Message Sent Confirmation Handler ==============
+
+  void _onMessageSentConfirmation(
+    MessageSentConfirmation event,
+    Emitter<MessagingState> emit,
+  ) {
+    _log('_onMessageSentConfirmation', 'Message sent confirmed with tempId: ${event.tempId}');
+    _log('_onMessageSentConfirmation', 'Server data: ${event.messageData}');
+    
+    // Parse attachment from server response if present
+    AttachmentEntity? parsedAttachment;
+    if (event.messageData['attachment'] != null) {
+      final attachmentData = event.messageData['attachment'];
+      parsedAttachment = AttachmentEntity(
+        fileName: attachmentData['fileName'] ?? 'file',
+        fileSize: attachmentData['fileSize'] ?? 0,
+        mimeType: attachmentData['mimeType'] ?? 'application/octet-stream',
+        s3Key: attachmentData['s3Key'],
+        s3Url: attachmentData['s3Url'] ?? attachmentData['url'],
+      );
+      _log('_onMessageSentConfirmation', 'Parsed attachment: ${parsedAttachment.s3Url}');
+    }
+    
+    // Update the optimistic message with the real message from server
+    final currentState = state;
+    if (currentState is MessagesLoaded) {
+      final updatedMessages = currentState.messages.map((msg) {
+        if (msg.id == 'temp_${event.tempId}') {
+          // Replace with real message data including attachment
+          return MessageEntity(
+            id: event.messageData['id'] ?? event.messageData['_id'] ?? msg.id,
+            conversationId: msg.conversationId,
+            senderId: msg.senderId,
+            senderType: msg.senderType,
+            receiverId: msg.receiverId,
+            receiverType: msg.receiverType,
+            messageType: msg.messageType,
+            content: event.messageData['content'] ?? msg.content,
+            attachment: parsedAttachment, // Include the attachment from server
+            isDelivered: true,
+            isRead: false,
+            createdAt: msg.createdAt,
+            updatedAt: DateTime.now(),
+          );
+        }
+        return msg;
+      }).toList();
+      
+      // Also update the cache to keep it in sync
+      _messagesCache[currentState.conversationId] = updatedMessages;
+      
+      emit(currentState.copyWith(messages: updatedMessages));
+    }
+    
+    // Refresh conversations to update last message preview
+    add(const LoadConversations(refresh: true));
+  }
+
   // ============== Helper Methods ==============
 
   ConversationEntity _createEmptyConversation(String id) {
@@ -588,10 +903,10 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
   }
 
   /// Mark messages as read via socket (faster than REST)
-  void markAsReadViaSocket(String conversationId, String senderId) {
+  void markAsReadViaSocket(String conversationId, {List<String>? messageIds}) {
     messagingSocketService?.markAsRead(
       conversationId: conversationId,
-      senderId: senderId,
+      messageIds: messageIds,
     );
   }
 

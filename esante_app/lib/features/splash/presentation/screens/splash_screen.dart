@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:lottie/lottie.dart';
 import '../../../../core/constants/app_assets.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../injection_container.dart';
 import '../../../auth/domain/entities/user_entity.dart';
@@ -69,6 +70,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         // User is logged in, restore session (initializes WebSocket)
         debugPrint('[SplashScreen] User found: ${cachedUser.email}, role: ${cachedUser.role}');
         await authRepository.restoreSession();
+        
+        // Register device for push notifications on session restore
+        try {
+          final pushService = PushNotificationService();
+          await pushService.setExternalUserId(cachedUser.id);
+          await pushService.registerDeviceWithBackend();
+          debugPrint('[SplashScreen] Push notification device registered');
+        } catch (e) {
+          debugPrint('[SplashScreen] Push registration failed (non-blocking): $e');
+        }
         
         if (cachedUser.role == UserRole.doctor) {
           _navigateToDoctorDashboard();

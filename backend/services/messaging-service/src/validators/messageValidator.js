@@ -35,14 +35,14 @@ export const getMessagesSchema = Joi.object({
 });
 
 // Validation schema for marking messages as read
+// messageIds is optional - if not provided, all unread messages in conversation will be marked as read
 export const markAsReadSchema = Joi.object({
   messageIds: Joi.array()
     .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
     .min(1)
-    .required()
+    .optional()
     .messages({
-      'array.min': 'At least one message ID is required',
-      'any.required': 'Message IDs are required',
+      'array.min': 'At least one message ID is required when provided',
     }),
 });
 
@@ -142,10 +142,9 @@ export const markAsReadSocketSchema = Joi.object({
   messageIds: Joi.array()
     .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
     .min(1)
-    .required()
+    .optional()
     .messages({
-      'array.min': 'At least one message ID is required',
-      'any.required': 'Message IDs are required',
+      'array.min': 'At least one message ID is required when provided',
     }),
 });
 

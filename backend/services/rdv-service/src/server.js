@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -13,8 +14,12 @@ import {
 } from '../../../shared/index.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
+import adminAppointmentRoutes from './routes/adminAppointmentRoutes.js';
+import { initializeS3 } from './services/s3Service.js';
+import { initializeSocket } from './socket/index.js';
 
 const app = express();
+const server = createServer(app);
 const SERVICE_NAME = 'rdv-service';
 
 // ============================
@@ -39,6 +44,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/v1/appointments', appointmentRoutes);
+app.use('/api/v1/appointments/admin', adminAppointmentRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 
 // 404 handler
@@ -61,6 +67,9 @@ const startServer = async () => {
     // Bootstrap: Load config from Consul + register service
     await bootstrap(SERVICE_NAME);
     
+    // Initialize S3 client for document uploads
+    initializeS3();
+    
     // Connect to MongoDB using config from Consul
     const mongoUri = getMongoUri('esante_rdv');
     await connectDB(mongoUri);
@@ -69,15 +78,19 @@ const startServer = async () => {
     await kafkaProducer.connect();
     console.log('✅ Kafka Producer connected');
 
+    // Initialize Socket.IO for real-time updates
+    initializeSocket(server);
+
     const PORT = getConfig('PORT', '3003');
 
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`
-╔════════════════════════════════════════╗
-║   📅 RDV SERVICE STARTED 📅            ║
-║   Port: ${PORT}                         ║
-║   Environment: ${getConfig('NODE_ENV')} ║
-╚════════════════════════════════════════╝
+╔════════════════════════════════════════════╗
+║   📅 RDV SERVICE STARTED 📅                ║
+║   Port: ${PORT}                             ║
+║   Socket.IO: /rdv-socket                   ║
+║   Environment: ${getConfig('NODE_ENV')}    ║
+╚════════════════════════════════════════════╝
       `);
     });
   } catch (error) {

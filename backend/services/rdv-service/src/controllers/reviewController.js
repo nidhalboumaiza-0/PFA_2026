@@ -330,3 +330,309 @@ export const deleteReview = async (req, res, next) => {
         next(error);
     }
 };
+
+/**
+ * Admin: Get all reviews with pagination and filters
+ * GET /api/v1/reviews/admin
+ */
+export const getAllReviews = async (req, res, next) => {
+    try {
+        const { 
+            page = 1, 
+            limit = 10, 
+            rating, 
+            doctorId,
+            sortBy = 'createdAt', 
+            sortOrder = 'desc' 
+        } = req.query;
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        // Build filter
+        const filter = {};
+        if (rating) {
+            filter.rating = parseInt(rating);
+        }
+        if (doctorId) {
+            filter.doctorId = new mongoose.Types.ObjectId(doctorId);
+        }
+
+        // Build sort
+        const sort = {};
+        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+        // Get reviews with pagination
+        const [reviews, total] = await Promise.all([
+            Review.find(filter)
+                .sort(sort)
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            Review.countDocuments(filter)
+        ]);
+
+        // Calculate stats
+        const stats = await Review.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    averageRating: { $avg: '$rating' },
+                    totalReviews: { $sum: 1 },
+                    rating5: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+                    rating4: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+                    rating3: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+                    rating2: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+                    rating1: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } }
+                }
+            }
+        ]);
+
+        const reviewStats = stats[0] || {
+            averageRating: 0,
+            totalReviews: 0,
+            rating5: 0,
+            rating4: 0,
+            rating3: 0,
+            rating2: 0,
+            rating1: 0
+        };
+
+        return sendSuccess(res, 200, 'Reviews retrieved successfully', {
+            reviews,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(total / parseInt(limit)),
+                totalReviews: total,
+                hasMore: skip + reviews.length < total
+            },
+            stats: {
+                averageRating: reviewStats.averageRating ? Math.round(reviewStats.averageRating * 10) / 10 : 0,
+                totalReviews: reviewStats.totalReviews,
+                distribution: {
+                    5: reviewStats.rating5,
+                    4: reviewStats.rating4,
+                    3: reviewStats.rating3,
+                    2: reviewStats.rating2,
+                    1: reviewStats.rating1
+                }
+            }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Admin: Get advanced review statistics
+ * GET /api/v1/reviews/admin/stats
+ */
+export const getAdvancedStats = async (req, res, next) => {
+    try {
+        // Overall stats
+        const overallStats = await Review.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    averageRating: { $avg: '$rating' },
+                    totalReviews: { $sum: 1 },
+                    totalWithComments: { $sum: { $cond: [{ $ne: ['$comment', null] }, 1, 0] } },
+                    rating5: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+                    rating4: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+                    rating3: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+                    rating2: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+                    rating1: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } }
+                }
+            }
+        ]);
+
+        // Reviews per doctor with stats
+        const doctorStats = await Review.aggregate([
+            {
+                $group: {
+                    _id: '$doctorId',
+                    averageRating: { $avg: '$rating' },
+                    totalReviews: { $sum: 1 },
+                    totalWithComments: { $sum: { $cond: [{ $ne: ['$comment', null] }, 1, 0] } },
+                    rating5: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+                    rating4: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+                    rating3: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+                    rating2: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+                    rating1: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } },
+                    latestReview: { $max: '$createdAt' },
+                    oldestReview: { $min: '$createdAt' }
+                }
+            },
+            { $sort: { totalReviews: -1 } }
+        ]);
+
+        // Reviews over time (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const reviewsOverTime = await Review.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: thirtyDaysAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+                    },
+                    count: { $sum: 1 },
+                    avgRating: { $avg: '$rating' }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Top rated doctors (min 3 reviews)
+        const topRatedDoctors = await Review.aggregate([
+            {
+                $group: {
+                    _id: '$doctorId',
+                    averageRating: { $avg: '$rating' },
+                    totalReviews: { $sum: 1 }
+                }
+            },
+            { $match: { totalReviews: { $gte: 1 } } },
+            { $sort: { averageRating: -1, totalReviews: -1 } },
+            { $limit: 10 }
+        ]);
+
+        // Lowest rated doctors (potential issues)
+        const lowestRatedDoctors = await Review.aggregate([
+            {
+                $group: {
+                    _id: '$doctorId',
+                    averageRating: { $avg: '$rating' },
+                    totalReviews: { $sum: 1 }
+                }
+            },
+            { $match: { totalReviews: { $gte: 1 } } },
+            { $sort: { averageRating: 1, totalReviews: -1 } },
+            { $limit: 5 }
+        ]);
+
+        // Recent reviews
+        const recentReviews = await Review.find()
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean();
+
+        const overall = overallStats[0] || {
+            averageRating: 0,
+            totalReviews: 0,
+            totalWithComments: 0,
+            rating5: 0,
+            rating4: 0,
+            rating3: 0,
+            rating2: 0,
+            rating1: 0
+        };
+
+        return sendSuccess(res, 200, 'Advanced stats retrieved successfully', {
+            overall: {
+                averageRating: overall.averageRating ? Math.round(overall.averageRating * 10) / 10 : 0,
+                totalReviews: overall.totalReviews,
+                totalWithComments: overall.totalWithComments,
+                commentRate: overall.totalReviews > 0 
+                    ? Math.round((overall.totalWithComments / overall.totalReviews) * 100) 
+                    : 0,
+                distribution: {
+                    5: overall.rating5,
+                    4: overall.rating4,
+                    3: overall.rating3,
+                    2: overall.rating2,
+                    1: overall.rating1
+                },
+                positiveRate: overall.totalReviews > 0
+                    ? Math.round(((overall.rating5 + overall.rating4) / overall.totalReviews) * 100)
+                    : 0,
+                negativeRate: overall.totalReviews > 0
+                    ? Math.round(((overall.rating1 + overall.rating2) / overall.totalReviews) * 100)
+                    : 0
+            },
+            doctorStats: doctorStats.map(d => ({
+                doctorId: d._id,
+                averageRating: Math.round(d.averageRating * 10) / 10,
+                totalReviews: d.totalReviews,
+                totalWithComments: d.totalWithComments,
+                distribution: {
+                    5: d.rating5,
+                    4: d.rating4,
+                    3: d.rating3,
+                    2: d.rating2,
+                    1: d.rating1
+                },
+                latestReview: d.latestReview,
+                oldestReview: d.oldestReview
+            })),
+            reviewsOverTime,
+            topRatedDoctors: topRatedDoctors.map(d => ({
+                doctorId: d._id,
+                averageRating: Math.round(d.averageRating * 10) / 10,
+                totalReviews: d.totalReviews
+            })),
+            lowestRatedDoctors: lowestRatedDoctors.map(d => ({
+                doctorId: d._id,
+                averageRating: Math.round(d.averageRating * 10) / 10,
+                totalReviews: d.totalReviews
+            })),
+            recentReviews
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Admin: Delete any review (moderation)
+ * DELETE /api/v1/reviews/admin/:reviewId
+ */
+export const adminDeleteReview = async (req, res, next) => {
+    try {
+        const { reviewId } = req.params;
+
+        // Find the review
+        const review = await Review.findById(reviewId);
+        if (!review) {
+            return sendError(res, 404, 'Review not found');
+        }
+
+        const doctorId = review.doctorId;
+        await review.deleteOne();
+
+        // Recalculate average rating
+        const { rating: avgRating, totalReviews } = await Review.calculateAverageRating(doctorId);
+
+        // Emit event to update doctor's rating
+        try {
+            await kafkaProducer.send({
+                topic: TOPICS.RDV.DOCTOR_RATING_UPDATED,
+                messages: [
+                    createEvent('doctor.rating.updated', {
+                        doctorId: doctorId.toString(),
+                        rating: avgRating,
+                        totalReviews
+                    })
+                ]
+            });
+        } catch (kafkaError) {
+            console.error('Failed to emit doctor.rating.updated event:', kafkaError);
+        }
+
+        return sendSuccess(res, 200, 'Review deleted by admin successfully', {
+            doctorStats: {
+                averageRating: avgRating,
+                totalReviews
+            }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};

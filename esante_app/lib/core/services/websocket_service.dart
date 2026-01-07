@@ -80,25 +80,30 @@ class WebSocketService {
     _currentToken = token;
 
     // Connect to notification-service via API Gateway on port 3000
-    // The gateway proxies socket connections to the notification-service
+    // The gateway proxies /socket.io to notification-service
     final gatewayUrl = baseUrl ?? 'http://10.0.2.2:3000';
-    _log('init', 'Connecting to WebSocket via gateway at $gatewayUrl/notifications');
+    _log('init', 'Connecting to WebSocket via gateway at $gatewayUrl with path /socket.io');
 
     try {
+      // Use raw options map - OptionBuilder doesn't apply path correctly
       _socket = io.io(
-        '$gatewayUrl/notifications',
-        io.OptionBuilder()
-            .setTransports(['websocket']) // Use websocket only for mobile
-            .setAuth({'token': token})
-            .setExtraHeaders({'Authorization': 'Bearer $token'})
-            .enableAutoConnect()
-            .enableReconnection()
-            .setReconnectionDelay(2000)
-            .setReconnectionDelayMax(10000)
-            .setReconnectionAttempts(10)
-            .setTimeout(60000) // 60 second timeout
-            .build(),
+        gatewayUrl,
+        <String, dynamic>{
+          'transports': ['websocket', 'polling'], // Allow fallback to polling
+          'path': '/socket.io',
+          'forceNew': true, // Force new connection
+          'auth': {'token': token},
+          'extraHeaders': {'Authorization': 'Bearer $token'},
+          'autoConnect': false, // Manual connect after setup
+          'reconnection': true,
+          'reconnectionDelay': 2000,
+          'reconnectionDelayMax': 10000,
+          'reconnectionAttempts': 10,
+          'timeout': 90000, // Match server timeout
+        },
       );
+      
+      _log('init', 'Socket configured with path: /socket.io, forceNew: true');
 
       _setupEventListeners();
       

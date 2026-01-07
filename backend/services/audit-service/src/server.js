@@ -1,6 +1,5 @@
 import express from 'express';
 import { createServer } from 'http';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import auditRoutes from './routes/auditRoutes.js';
@@ -8,7 +7,7 @@ import { initializeSocket, emitCriticalEvent, emitSecurityAlert } from './socket
 import { startAuditConsumer, disconnectConsumer } from './kafka/auditConsumer.js';
 import AuditLog from './models/AuditLog.js';
 import morgan from 'morgan';
-import { bootstrap, getConfig, getMongoUri } from '../../../shared/index.js';
+import { bootstrap, getConfig, getMongoUri, mongoose } from '../../../shared/index.js';
 
 const app = express();
 const httpServer = createServer(app);

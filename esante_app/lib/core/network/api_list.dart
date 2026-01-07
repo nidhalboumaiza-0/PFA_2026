@@ -42,6 +42,8 @@ class ApiList {
   static const String patientProfile = '$_usersBase/patient/profile';
   static const String doctorProfile = '$_usersBase/doctor/profile';
   static const String userUploadPhoto = '$_usersBase/upload-photo';
+  static String patientById(String patientId) => '$_usersBase/patients/$patientId';
+  static String profileById(String profileId) => '$_usersBase/profile/$profileId';
 
   // ============== Doctor Search Endpoints ==============
   static const String doctorsSearch = '$_doctorsBase/search';
@@ -87,6 +89,7 @@ class ApiList {
       '$_appointmentsBase/$appointmentId';
 
   // Document attachments
+  static const String appointmentUploadDocument = '$_appointmentsBase/upload-document';
   static String appointmentDocuments(String appointmentId) =>
       '$_appointmentsBase/$appointmentId/documents';
   static String appointmentDocumentDelete(String appointmentId, String documentId) =>
@@ -111,6 +114,10 @@ class ApiList {
   // Patient medical history
   static const String patientMyMedicalHistory = '$_medicalBase/patients/my-history';
 
+  // Doctor: get patient's medical history
+  static String doctorPatientMedicalHistory(String patientId) =>
+      '$_medicalBase/patient-history/$patientId';
+
   // Doctor prescription operations
   static const String doctorCreatePrescription = '$_medicalBase/prescriptions';
 
@@ -131,4 +138,18 @@ class ApiList {
   static const String unreadCount = '$_messagesBase/unread-count';
   static const String searchMessages = '$_messagesBase/search';
   static String userOnlineStatus(String userId) => '$_messagesBase/users/$userId/online-status';
+
+  // ============== Notification Endpoints ==============
+  static const String _notificationsBase = '/api/v1/notifications';
+  
+  static const String notifications = _notificationsBase;
+  static const String notificationsUnreadCount = '$_notificationsBase/unread-count';
+  static String notificationMarkRead(String notificationId) =>
+      '$_notificationsBase/$notificationId/read';
+  static const String notificationsMarkAllRead = '$_notificationsBase/mark-all-read';
+  static const String notificationPreferences = '$_notificationsBase/preferences';
+  static const String registerDevice = '$_notificationsBase/register-device';
+  static const String unregisterDevice = '$_notificationsBase/devices';
+  static String notificationDelete(String notificationId) =>
+      '$_notificationsBase/$notificationId';
 }

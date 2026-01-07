@@ -76,12 +76,14 @@ class ApiClient {
     }
   }
 
-  /// PUT request
+  /// PUT request with automatic retry for connection errors
   Future<Map<String, dynamic>> put(
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
   }) async {
+    _log('put', 'PUT $path');
+    
     int attempts = 0;
     while (true) {
       try {
@@ -90,10 +92,13 @@ class ApiClient {
           data: data,
           queryParameters: queryParameters,
         );
+        _log('put', 'Response status: ${response.statusCode}');
         return _handleResponse(response);
       } on DioException catch (e) {
         attempts++;
+        _log('put', 'DioException: ${e.type} - ${e.message}');
         if (_isRetryableError(e) && attempts <= _maxRetries) {
+          _log('put', 'Retryable error, attempt $attempts/$_maxRetries. Retrying...');
           await Future.delayed(_retryDelay);
           continue;
         }
@@ -198,6 +203,56 @@ class ApiClient {
         return 'RATE_LIMITED';
       default:
         return 'SERVER_ERROR';
+    }
+  }
+
+  /// Upload a file with multipart form data
+  Future<Map<String, dynamic>> uploadFile(
+    String path, {
+    required dynamic file,
+    String fileFieldName = 'file',
+    Map<String, dynamic>? additionalData,
+  }) async {
+    _log('uploadFile', 'POST $path (file upload)');
+    
+    int attempts = 0;
+    while (true) {
+      try {
+        FormData formData;
+        
+        if (file is String) {
+          // File path
+          formData = FormData.fromMap({
+            fileFieldName: await MultipartFile.fromFile(file),
+            ...?additionalData,
+          });
+        } else {
+          // Assume it's a File object
+          formData = FormData.fromMap({
+            fileFieldName: await MultipartFile.fromFile(file.path),
+            ...?additionalData,
+          });
+        }
+
+        final response = await _dio.post(
+          path,
+          data: formData,
+          options: Options(
+            contentType: 'multipart/form-data',
+          ),
+        );
+        _log('uploadFile', 'Response status: ${response.statusCode}');
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        attempts++;
+        if (_isRetryableError(e) && attempts <= _maxRetries) {
+          _log('uploadFile', 'Retryable error, attempt $attempts/$_maxRetries. Retrying...');
+          await Future.delayed(_retryDelay);
+          continue;
+        }
+        _log('uploadFile', 'DioException: ${e.type} - ${e.message}');
+        throw _handleDioError(e);
+      }
     }
   }
 }

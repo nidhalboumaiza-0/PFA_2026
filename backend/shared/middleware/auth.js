@@ -1,4 +1,12 @@
 import jwt from 'jsonwebtoken';
+import { getConfig } from '../config/consulConfig.js';
+
+/**
+ * Get JWT secret - use getConfig for dynamic lookup after bootstrap
+ */
+const getJwtSecret = () => {
+  return getConfig('JWT_SECRET', process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
+};
 
 /**
  * Verify JWT token and attach user to request
@@ -11,11 +19,14 @@ export const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'Access token required' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = getJwtSecret();
+    console.log(`🔐 Auth: Verifying token with secret: ${secret.substring(0, 10)}...`);
+    const decoded = jwt.verify(token, secret);
     req.user = decoded;
     req.token = token;
     next();
   } catch (error) {
+    console.error(`❌ Auth error: ${error.message}`);
     return res.status(401).json({ message: 'Invalid or expired token' });
   }
 };
@@ -76,7 +87,7 @@ export const optionalAuth = (req, res, next) => {
       return next();
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    jwt.verify(token, getJwtSecret(), (err, decoded) => {
       if (err) {
         req.user = null;
       } else {

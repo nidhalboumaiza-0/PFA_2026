@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 // Core
 import 'core/network/api_client.dart';
 import 'core/network/auth_interceptor.dart';
+import 'core/network/network_info.dart';
 import 'core/storage/hive_storage_service.dart';
 import 'core/services/websocket_service.dart';
 import 'core/services/connectivity_service.dart';
@@ -83,6 +84,13 @@ import 'features/prescriptions/domain/usecases/get_my_prescriptions.dart';
 import 'features/prescriptions/domain/usecases/get_prescription_by_id.dart';
 import 'features/prescriptions/presentation/bloc/prescription_bloc.dart';
 
+// Medical Records Feature
+import 'features/medical_records/data/datasources/medical_records_remote_datasource.dart';
+import 'features/medical_records/data/repositories/medical_records_repository_impl.dart';
+import 'features/medical_records/domain/repositories/medical_records_repository.dart';
+import 'features/medical_records/domain/usecases/get_patient_medical_history_usecase.dart';
+import 'features/medical_records/presentation/bloc/patient_history_bloc.dart';
+
 // Messaging Feature
 import 'features/messaging/data/datasources/messaging_remote_datasource.dart';
 import 'features/messaging/data/repositories/messaging_repository_impl.dart';
@@ -94,6 +102,12 @@ import 'features/messaging/domain/usecases/mark_messages_read_usecase.dart';
 import 'features/messaging/domain/usecases/send_file_message_usecase.dart';
 import 'features/messaging/domain/usecases/get_unread_count_usecase.dart';
 import 'features/messaging/presentation/bloc/messaging_bloc.dart';
+
+// Notifications Feature
+import 'features/notifications/data/datasources/notification_remote_datasource.dart';
+import 'features/notifications/data/repositories/notification_repository_impl.dart';
+import 'features/notifications/domain/repositories/notification_repository.dart';
+import 'features/notifications/presentation/bloc/notification_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -109,6 +123,11 @@ Future<void> initializeDependencies() async {
   final connectivityService = ConnectivityService();
   await connectivityService.init();
   sl.registerLazySingleton<ConnectivityService>(() => connectivityService);
+
+  // ============== Network Info ==============
+  sl.registerLazySingleton<NetworkInfo>(
+    () => NetworkInfoImpl(connectivityService: sl()),
+  );
 
   // ============== External ==============
   sl.registerLazySingleton<Dio>(() {
@@ -285,6 +304,7 @@ Future<void> initializeDependencies() async {
     () => AppointmentRepositoryImpl(
       remoteDataSource: sl(),
       localDataSource: sl(),
+      apiClient: sl(),
     ),
   );
 
@@ -362,6 +382,27 @@ Future<void> initializeDependencies() async {
     createPrescriptionUseCase: sl(),
   ));
 
+  // ============== Medical Records Feature ==============
+  print('[DI] Registering Medical Records dependencies...');
+
+  // Data Sources
+  sl.registerLazySingleton<MedicalRecordsRemoteDataSource>(
+    () => MedicalRecordsRemoteDataSourceImpl(apiClient: sl()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<MedicalRecordsRepository>(
+    () => MedicalRecordsRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Use Cases
+  sl.registerLazySingleton(() => GetPatientMedicalHistoryUseCase(sl()));
+
+  // Bloc (Factory - new instance per screen)
+  sl.registerFactory(() => PatientHistoryBloc(
+    getPatientMedicalHistoryUseCase: sl(),
+  ));
+
   // ============== Messaging Feature ==============
   print('[DI] Registering Messaging dependencies...');
 
@@ -383,8 +424,8 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton(() => SendFileMessageUseCase(sl()));
   sl.registerLazySingleton(() => GetUnreadCountUseCase(sl()));
 
-  // Bloc (Factory - new instance per screen for independent state)
-  sl.registerFactory(() => MessagingBloc(
+  // Bloc (Singleton - shared across screens for consistent state)
+  sl.registerLazySingleton(() => MessagingBloc(
     getConversationsUseCase: sl(),
     getMessagesUseCase: sl(),
     createConversationUseCase: sl(),
@@ -393,6 +434,25 @@ Future<void> initializeDependencies() async {
     getUnreadCountUseCase: sl(),
     messagingSocketService: sl<MessagingSocketService>(),
   ));
+
+  // ============== Notifications Feature ==============
+  print('[DI] Registering Notifications dependencies...');
+
+  // Data Sources
+  sl.registerLazySingleton<NotificationRemoteDataSource>(
+    () => NotificationRemoteDataSourceImpl(apiClient: sl()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<NotificationRepository>(
+    () => NotificationRepositoryImpl(
+      remoteDataSource: sl(),
+      networkInfo: sl(),
+    ),
+  );
+
+  // Bloc (Factory - new instance per screen)
+  sl.registerFactory(() => NotificationBloc(repository: sl()));
   
   print('[DI] All dependencies initialized successfully');
 }

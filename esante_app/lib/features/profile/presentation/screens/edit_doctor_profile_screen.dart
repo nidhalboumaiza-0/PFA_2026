@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../widgets/location_picker_card.dart';
+import '../widgets/education_editor.dart';
 import '../../../../injection_container.dart';
 import '../../domain/entities/doctor_profile_entity.dart';
 import '../../domain/usecases/update_doctor_profile_usecase.dart';
@@ -38,10 +39,14 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
   late TextEditingController _aboutController;
   late TextEditingController _consultationFeeController;
   late TextEditingController _languagesController;
+  late TextEditingController _subSpecialtyController;
 
   String? _selectedSpecialty;
   bool _acceptsInsurance = false;
   bool _hasChanges = false;
+  
+  // Education list for the editor
+  List<Map<String, dynamic>> _educationList = [];
   
   // Location coordinates for clinic
   double? _clinicLatitude;
@@ -100,6 +105,7 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
       text: profile.consultationFee > 0 ? profile.consultationFee.toStringAsFixed(0) : '',
     );
     _languagesController = TextEditingController(text: profile.languages.join(', '));
+    _subSpecialtyController = TextEditingController(text: profile.subSpecialty ?? '');
 
     _selectedSpecialty = _specialties.contains(profile.specialty) ? profile.specialty : null;
     _acceptsInsurance = profile.acceptsInsurance;
@@ -107,6 +113,15 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
     // Initialize clinic coordinates
     _clinicLatitude = profile.clinicAddress?.latitude;
     _clinicLongitude = profile.clinicAddress?.longitude;
+    
+    // Initialize education list from profile
+    _educationList = profile.education
+        .map((e) => {
+              'degree': e.degree,
+              'institution': e.institution,
+              if (e.year != null) 'year': e.year,
+            })
+        .toList();
 
     _addChangeListeners();
   }
@@ -127,6 +142,7 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
       _aboutController,
       _consultationFeeController,
       _languagesController,
+      _subSpecialtyController,
     ];
 
     for (var controller in controllers) {
@@ -156,6 +172,7 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
     _aboutController.dispose();
     _consultationFeeController.dispose();
     _languagesController.dispose();
+    _subSpecialtyController.dispose();
     super.dispose();
   }
 
@@ -191,8 +208,10 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
       lastName: _lastNameController.text,
       phone: _phoneController.text,
       specialty: _selectedSpecialty,
+      subSpecialty: _subSpecialtyController.text.isNotEmpty ? _subSpecialtyController.text : null,
       licenseNumber: _licenseNumberController.text,
       yearsOfExperience: int.tryParse(_yearsOfExperienceController.text),
+      education: _educationList.isNotEmpty ? _educationList : null,
       clinicName: _clinicNameController.text.isNotEmpty ? _clinicNameController.text : null,
       clinicAddress: clinicAddress,
       about: _aboutController.text.isNotEmpty ? _aboutController.text : null,
@@ -240,6 +259,9 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
                           _buildSectionTitle('Professional Information'),
                           SizedBox(height: 16.h),
                           _buildProfessionalSection(),
+
+                          SizedBox(height: 32.h),
+                          _buildEducationSection(),
 
                           SizedBox(height: 32.h),
                           _buildSectionTitle('Clinic Information'),
@@ -417,6 +439,13 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
         ),
         SizedBox(height: 16.h),
         CustomTextField(
+          controller: _subSpecialtyController,
+          hintText: 'e.g., Echocardiography, Sports Medicine',
+          label: 'Sub-Specialty (Optional)',
+          prefixIcon: Icons.medical_services_outlined,
+        ),
+        SizedBox(height: 16.h),
+        CustomTextField(
           controller: _licenseNumberController,
           hintText: 'Enter license number',
           label: 'License Number',
@@ -542,6 +571,18 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildEducationSection() {
+    return EducationEditor(
+      initialEducation: widget.profile.education,
+      onChanged: (educationList) {
+        setState(() {
+          _educationList = educationList;
+          _hasChanges = true;
+        });
+      },
     );
   }
 

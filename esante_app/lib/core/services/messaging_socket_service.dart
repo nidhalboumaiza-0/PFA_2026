@@ -69,6 +69,8 @@ class MessagingSocketService {
 
   /// Initialize socket connection with auth token
   Future<void> init(String token, {String? baseUrl}) async {
+    print('🔌🔌🔌 [MessagingSocketService] init() called! 🔌🔌🔌');
+    
     if (_isConnecting) {
       _log('init', 'Connection already in progress');
       return;
@@ -87,28 +89,39 @@ class MessagingSocketService {
     _currentToken = token;
 
     // Connect to messaging-service via API Gateway on port 3000
-    // The gateway proxies socket connections to the messaging-service
     final gatewayUrl = baseUrl ?? 'http://10.0.2.2:3000';
-    _log('init', 'Connecting to messaging socket via gateway at $gatewayUrl/messaging');
+    _log('init', 'Connecting to messaging socket via API Gateway at $gatewayUrl');
 
     try {
+      // Create socket with explicit path using forceNew to ensure fresh connection
+      // Using WebSocket only - polling causes transport close issues through the gateway
       _socket = io.io(
-        '$gatewayUrl/messaging',
-        io.OptionBuilder()
-            .setTransports(['websocket'])
-            .setAuth({'token': token})
-            .setExtraHeaders({'Authorization': 'Bearer $token'})
-            .enableAutoConnect()
-            .enableReconnection()
-            .setReconnectionDelay(2000)
-            .setReconnectionDelayMax(10000)
-            .setReconnectionAttempts(10)
-            .setTimeout(60000)
-            .build(),
+        gatewayUrl,
+        <String, dynamic>{
+          'transports': ['websocket'],  // WebSocket only, no polling
+          'path': '/messaging/socket.io', // Path via API Gateway
+          'forceNew': true,  // Force a new connection, don't reuse existing
+          'auth': {'token': token},
+          'extraHeaders': {'Authorization': 'Bearer $token'},
+          'autoConnect': false,
+          'reconnection': true,
+          'reconnectionDelay': 2000,        // Start with 2s delay
+          'reconnectionDelayMax': 10000,    // Max 10s between attempts
+          'reconnectionAttempts': 10,       // More attempts
+          'timeout': 90000,                 // 90s connection timeout
+        },
       );
+      
+      // Debug: Log connection details
+      _log('init', '🔧 Socket created:');
+      _log('init', '   - URL: $gatewayUrl');
+      _log('init', '   - Path: /messaging/socket.io');
+      _log('init', '   - Transport: websocket only');
+      _log('init', '   - ForceNew: true');
 
       _setupEventListeners();
       _socket!.connect();
+      _log('init', 'Socket connect() called');
       
       _log('init', 'Messaging socket connection initiated');
     } catch (e) {
@@ -132,8 +145,8 @@ class MessagingSocketService {
       _emitEvent(const MessagingSocketEvent(type: MessagingSocketEventType.connected));
     });
 
-    _socket!.onDisconnect((_) {
-      _log('onDisconnect', 'Disconnected from messaging server');
+    _socket!.onDisconnect((reason) {
+      _log('onDisconnect', 'Disconnected from messaging server. Reason: $reason');
       _isConnected = false;
       _emitEvent(const MessagingSocketEvent(type: MessagingSocketEventType.disconnected));
     });
@@ -147,11 +160,35 @@ class MessagingSocketService {
       ));
     });
 
+    // Reconnection events for debugging
+    _socket!.onReconnect((attempt) {
+      _log('onReconnect', 'Reconnected after $attempt attempts');
+      _isConnected = true;
+      _isConnecting = false;
+    });
+
+    _socket!.onReconnectAttempt((attempt) {
+      _log('onReconnectAttempt', 'Reconnection attempt #$attempt');
+    });
+
+    _socket!.onReconnectError((error) {
+      _log('onReconnectError', 'Reconnection error: $error');
+    });
+
+    _socket!.onReconnectFailed((_) {
+      _log('onReconnectFailed', 'All reconnection attempts failed');
+      _isConnected = false;
+      _isConnecting = false;
+    });
+
+    // Note: ping/pong are handled internally by engine.io, don't manually listen
+
     // ============== Message Events ==============
     
     // New message received
     _socket!.on('new_message', (data) {
-      _log('new_message', 'Received new message');
+      _log('new_message', '🔔 Received new message: $data');
+      _log('new_message', '📡 Broadcasting to ${_eventController.hasListener ? "listeners" : "NO LISTENERS"}');
       _emitEvent(MessagingSocketEvent(
         type: MessagingSocketEventType.newMessage,
         data: Map<String, dynamic>.from(data),
@@ -198,7 +235,8 @@ class MessagingSocketService {
     
     // User started typing
     _socket!.on('user_typing', (data) {
-      _log('user_typing', 'User is typing');
+      _log('user_typing', '⌨️ User is typing: $data');
+      _log('user_typing', '📡 Broadcasting to ${_eventController.hasListener ? "listeners" : "NO LISTENERS"}');
       _emitEvent(MessagingSocketEvent(
         type: MessagingSocketEventType.userTyping,
         data: Map<String, dynamic>.from(data),
@@ -262,19 +300,25 @@ class MessagingSocketService {
     String? tempId,
     Map<String, dynamic>? metadata,
   }) {
+    _log('sendMessage', 'Attempting to send message. isConnected=$_isConnected, socket=${_socket != null}, socket.connected=${_socket?.connected}');
+    
     if (!_isConnected) {
       _log('sendMessage', 'Not connected, cannot send message');
       return;
     }
 
-    _socket!.emit('send_message', {
+    final payload = {
       'conversationId': conversationId,
       'receiverId': receiverId,
       'messageType': messageType,
       'content': content,
       'tempId': tempId ?? DateTime.now().millisecondsSinceEpoch.toString(),
       if (metadata != null) 'metadata': metadata,
-    });
+    };
+    
+    _log('sendMessage', 'Emitting send_message with payload: $payload');
+    _socket!.emit('send_message', payload);
+    _log('sendMessage', 'send_message event emitted');
   }
 
   /// Start typing indicator
@@ -306,13 +350,13 @@ class MessagingSocketService {
   /// Mark messages as read
   void markAsRead({
     required String conversationId,
-    required List<String> messageIds,
+    List<String>? messageIds,
   }) {
     if (!_isConnected) return;
 
     _socket!.emit('mark_as_read', {
       'conversationId': conversationId,
-      'messageIds': messageIds,
+      if (messageIds != null && messageIds.isNotEmpty) 'messageIds': messageIds,
     });
   }
 

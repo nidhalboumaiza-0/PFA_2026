@@ -106,6 +106,7 @@ class MessageEntity extends Equatable {
   final MessageSenderEntity? sender;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final Map<String, dynamic>? metadata;
 
   const MessageEntity({
     required this.id,
@@ -127,7 +128,11 @@ class MessageEntity extends Equatable {
     this.sender,
     required this.createdAt,
     required this.updatedAt,
+    this.metadata,
   });
+
+  /// Check if message is currently being uploaded
+  bool get isUploading => metadata?['uploading'] == true;
 
   /// Check if message was sent by current user
   bool isMine(String currentUserId) => senderId == currentUserId;
@@ -169,5 +174,6 @@ class MessageEntity extends Equatable {
         sender,
         createdAt,
         updatedAt,
+        metadata,
       ];
 }

@@ -46,7 +46,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             if (centerTitle) const Spacer(),
             
             if (titleWidget != null)
-              titleWidget!
+              Expanded(child: titleWidget!)
             else if (title != null)
               Text(
                 title!,

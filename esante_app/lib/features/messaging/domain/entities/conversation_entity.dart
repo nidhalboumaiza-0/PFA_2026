@@ -1,5 +1,4 @@
 import 'package:equatable/equatable.dart';
-import 'message_entity.dart';
 
 /// Participant information in a conversation
 class ParticipantEntity extends Equatable {
@@ -78,6 +77,33 @@ class ConversationEntity extends Equatable {
 
   /// Check if other participant is online
   bool get isOnline => otherParticipant?.isOnline ?? false;
+
+  /// Create a copy of this conversation with updated fields
+  ConversationEntity copyWith({
+    String? id,
+    List<String>? participantIds,
+    String? conversationType,
+    ParticipantEntity? otherParticipant,
+    LastMessageEntity? lastMessage,
+    int? unreadCount,
+    bool? isActive,
+    bool? isArchived,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return ConversationEntity(
+      id: id ?? this.id,
+      participantIds: participantIds ?? this.participantIds,
+      conversationType: conversationType ?? this.conversationType,
+      otherParticipant: otherParticipant ?? this.otherParticipant,
+      lastMessage: lastMessage ?? this.lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
+      isActive: isActive ?? this.isActive,
+      isArchived: isArchived ?? this.isArchived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 
   @override
   List<Object?> get props => [

@@ -40,6 +40,7 @@ import {
   updateFileDescription,
   getPatientMedicalHistory
 } from '../controllers/dossierMedicalController.js';
+import { getAdminStats } from '../controllers/adminController.js';
 import { auth, authorize } from '../../../../shared/index.js';
 import { uploadMiddleware, handleMulterError } from '../config/multerDocument.js';
 import {
@@ -63,6 +64,18 @@ import {
 } from '../validators/documentValidator.js';
 
 const router = express.Router();
+
+// ============================
+// ADMIN ROUTES
+// ============================
+
+// Get admin statistics for medical records
+router.get(
+  '/admin/stats',
+  auth,
+  authorize('admin'),
+  getAdminStats
+);
 
 // ============================
 // DOCTOR ROUTES

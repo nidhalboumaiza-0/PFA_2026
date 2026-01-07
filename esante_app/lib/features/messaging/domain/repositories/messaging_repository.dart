@@ -35,6 +35,7 @@ abstract class MessagingRepository {
   /// Send a file message
   Future<Either<Failure, MessageEntity>> sendFileMessage({
     required String conversationId,
+    required String receiverId,
     required File file,
     String? caption,
   });

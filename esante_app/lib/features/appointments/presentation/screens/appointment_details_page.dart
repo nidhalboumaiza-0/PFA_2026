@@ -335,6 +335,7 @@ class _AddDocumentSheetState extends State<_AddDocumentSheet> {
         final uploadResult = await repository.uploadDocumentFile(
           filePath: attachment.localPath,
           fileName: attachment.fileName,
+          appointmentId: widget.appointmentId,
         );
 
         await uploadResult.fold(

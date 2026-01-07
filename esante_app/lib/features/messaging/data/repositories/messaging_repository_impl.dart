@@ -20,11 +20,11 @@ class MessagingRepositoryImpl implements MessagingRepository {
   Failure _mapExceptionToFailure(dynamic e) {
     _log('_mapExceptionToFailure', 'Mapping exception: $e');
     if (e is ServerException) {
-      return ServerFailure(code: e.code ?? 'SERVER_ERROR', message: e.message);
+      return ServerFailure(code: e.code, message: e.message);
     } else if (e is NetworkException) {
-      return NetworkFailure(message: e.message);
-    } else if (e is UnauthorizedException) {
-      return AuthFailure(message: e.message);
+      return const NetworkFailure();
+    } else if (e is AuthException) {
+      return AuthFailure(code: e.code, message: e.message);
     }
     return ServerFailure(code: 'UNKNOWN', message: e.toString());
   }
@@ -106,6 +106,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
   @override
   Future<Either<Failure, MessageEntity>> sendFileMessage({
     required String conversationId,
+    required String receiverId,
     required File file,
     String? caption,
   }) async {
@@ -113,6 +114,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       _log('sendFileMessage', 'Sending file message to $conversationId');
       final message = await remoteDataSource.sendFileMessage(
         conversationId: conversationId,
+        receiverId: receiverId,
         file: file,
         caption: caption,
       );

@@ -15,9 +15,11 @@ export const authenticateToken = (req, res, next) => {
       });
     }
 
-    const jwtSecret = getConfig('JWT_SECRET', process.env.JWT_SECRET);
+    const jwtSecret = getConfig('JWT_SECRET', process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
+    console.log(`🔐 API Gateway Auth: Verifying with secret: ${jwtSecret.substring(0, 10)}...`);
     jwt.verify(token, jwtSecret, (err, decoded) => {
       if (err) {
+        console.error(`❌ API Gateway Auth error: ${err.message}`);
         return res.status(403).json({
           message: 'Invalid or expired token'
         });

@@ -5,11 +5,11 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
 import helmet from 'helmet';
 import cors from 'cors';
-import mongoose from 'mongoose';
-import { bootstrap, getConfig, getMongoUri } from '../../../shared/index.js';
+import { mongoose, bootstrap, getConfig, getMongoUri } from '../../../shared/index.js';
 import { connectProducer } from '../../../shared/kafka/producer.js';
 import { initializeSocketIO } from './socket/socketHandlers.js';
 import messageRoutes from './routes/messageRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import morgan from 'morgan';
 import { initializeS3 } from './utils/messageHelpers.js';
 
@@ -68,8 +68,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Routes
+// Routes - mounted at root because API gateway strips /api/v1/messages prefix
+// When accessed directly (not via gateway), use full path /api/v1/messages/...
 app.use('/api/v1/messages', messageRoutes);
+app.use('/api/v1/messaging/admin', adminRoutes);
+// When accessed via API gateway, path is already stripped to /conversations, etc.
+app.use('/', messageRoutes);
+app.use('/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -115,11 +120,15 @@ const startServer = async () => {
     // Initialize Socket.IO with config
     io = new Server(httpServer, {
       cors: {
-        origin: FRONTEND_URL,
+        origin: '*', // Allow all origins for mobile app
         methods: ['GET', 'POST'],
         credentials: true,
       },
       transports: ['websocket', 'polling'],
+      pingTimeout: 60000, // 60s - how long to wait for pong
+      pingInterval: 30000, // 30s - how often to send ping
+      connectTimeout: 45000, // 45s - connection timeout
+      allowEIO3: true, // Allow Engine.IO v3 clients for compatibility
     });
 
     // Initialize Socket.IO handlers and get onlineUsers map
@@ -138,8 +147,10 @@ const startServer = async () => {
     await connectProducer();
     console.log('✅ Kafka producer connected');
 
-    // Setup Redis adapter for Socket.IO (enables horizontal scaling)
-    redisClients = await setupRedisAdapter(REDIS_HOST, REDIS_PORT);
+    // TEMPORARILY DISABLED: Redis adapter for Socket.IO (enables horizontal scaling)
+    // Disabled to debug "invalid payload" errors
+    // redisClients = await setupRedisAdapter(REDIS_HOST, REDIS_PORT);
+    console.log('⚠️ Redis adapter DISABLED for debugging');
 
     // Start HTTP server with Socket.IO
     httpServer.listen(PORT, () => {

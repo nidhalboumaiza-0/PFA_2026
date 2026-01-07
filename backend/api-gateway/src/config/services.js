@@ -11,7 +11,8 @@ const services = {
   users: {
     url: process.env.USER_SERVICE_URL || 'http://127.0.0.1:3002',
     path: '/api/v1/users',
-    public: false // Authentication required
+    public: false, // Authentication required
+    socketPath: '/user-socket' // Socket.IO path for real-time admin updates
   },
   appointments: {
     url: process.env.RDV_SERVICE_URL || 'http://127.0.0.1:3003',
@@ -32,6 +33,12 @@ const services = {
     url: process.env.MESSAGING_SERVICE_URL || 'http://127.0.0.1:3006',
     path: '/api/v1/messages',
     public: false
+  },
+  messaging: {
+    url: process.env.MESSAGING_SERVICE_URL || 'http://127.0.0.1:3006',
+    path: '/api/v1/messaging',
+    public: false,
+    adminOnly: true // Admin routes for messaging stats
   },
   notifications: {
     url: process.env.NOTIFICATION_SERVICE_URL || 'http://127.0.0.1:3007',

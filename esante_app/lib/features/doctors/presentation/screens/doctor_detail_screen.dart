@@ -174,23 +174,20 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
 
     return CustomScrollView(
       slivers: [
-        // App Bar with Image
+        // Modern App Bar with gradient
         SliverAppBar(
-          expandedHeight: 200.h,
+          expandedHeight: 320.h,
           pinned: true,
+          backgroundColor: AppColors.primary,
           leading: Padding(
             padding: EdgeInsets.all(8.r),
-            child: AppBackButton(),
+            child: AppBackButton(
+              iconColor: Colors.white,
+              backgroundColor: Colors.white.withOpacity(0.2),
+            ),
           ),
           flexibleSpace: FlexibleSpaceBar(
-            title: Text(
-              'Dr. ${_doctor!.fullName}',
-              style: TextStyle(
-                fontSize: 16.sp,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            background: _buildHeaderImage(),
+            background: _buildModernHeader(),
           ),
         ),
 
@@ -199,71 +196,23 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: 20.h),
-              
-              // Specialty Badge
+              // Quick Stats Cards
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.w),
-                child: _buildSpecialtyBadge(),
+                padding: EdgeInsets.all(16.w),
+                child: _buildQuickStatsCards(),
               ),
-              SizedBox(height: 20.h),
 
-              // Stats Row
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.w),
-                child: _buildStatsRow(),
-              ),
-              SizedBox(height: 24.h),
-
-              // About Section using InfoCard
+              // About Section
               if (_doctor!.yearsOfExperience != null || 
                   (_doctor!.languages != null && _doctor!.languages!.isNotEmpty))
-                InfoCard(
-                  title: 'About',
-                  icon: Icons.person_outline,
-                  items: [
-                    if (_doctor!.yearsOfExperience != null)
-                      InfoItem(
-                        label: 'Experience',
-                        value: '${_doctor!.yearsOfExperience} years',
-                        icon: Icons.work_outline,
-                      ),
-                    if (_doctor!.languages != null && _doctor!.languages!.isNotEmpty)
-                      InfoItem(
-                        label: 'Languages',
-                        value: _doctor!.languages!.join(', '),
-                        icon: Icons.language,
-                      ),
-                  ],
-                ),
-              SizedBox(height: 16.h),
+                _buildAboutSection(),
 
-              // Clinic Info using InfoCard
-              InfoCard(
-                title: 'Clinic Information',
-                icon: Icons.local_hospital_outlined,
-                items: [
-                  if (_doctor!.clinicName != null)
-                    InfoItem(
-                      label: 'Clinic Name',
-                      value: _doctor!.clinicName!,
-                      icon: Icons.business,
-                    ),
-                  if (_doctor!.clinicAddress != null)
-                    InfoItem(
-                      label: 'Address',
-                      value: _doctor!.clinicAddress!.fullAddress,
-                      icon: Icons.location_on_outlined,
-                    ),
-                  if (_doctor!.consultationFee != null)
-                    InfoItem(
-                      label: 'Consultation Fee',
-                      value: '${_doctor!.consultationFee} TND',
-                      icon: Icons.payments_outlined,
-                    ),
-                ],
-              ),
-              SizedBox(height: 24.h),
+              // Consultation Fee Highlight
+              if (_doctor!.consultationFee != null)
+                _buildConsultationFeeCard(),
+
+              // Clinic Info Section
+              _buildClinicSection(),
 
               // Reviews Section
               _buildReviewsSection(),
@@ -276,9 +225,437 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     );
   }
 
+  Widget _buildModernHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primary,
+            AppColors.primary.withOpacity(0.8),
+            const Color(0xFF1E88E5),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // Profile Photo
+            Container(
+              padding: EdgeInsets.all(4.w),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                radius: 55.r,
+                backgroundColor: Colors.white,
+                backgroundImage: _doctor!.profilePhoto != null
+                    ? NetworkImage(_doctor!.profilePhoto!)
+                    : null,
+                child: _doctor!.profilePhoto == null
+                    ? Icon(Icons.person, size: 50.sp, color: AppColors.primary)
+                    : null,
+              ),
+            ),
+            SizedBox(height: 16.h),
+            
+            // Doctor Name
+            Text(
+              'Dr. ${_doctor!.fullName}',
+              style: TextStyle(
+                fontSize: 26.sp,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 8.h),
+            
+            // Specialty Badge
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20.r),
+                border: Border.all(color: Colors.white.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.medical_services, size: 16.sp, color: Colors.white),
+                  SizedBox(width: 6.w),
+                  Text(
+                    _doctor!.displaySpecialty,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14.sp,
+                    ),
+                  ),
+                  if (_doctor!.isVerified) ...[
+                    SizedBox(width: 8.w),
+                    Icon(Icons.verified, color: Colors.white, size: 18.sp),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: 20.h),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickStatsCards() {
+    return Row(
+      children: [
+        // Rating Card
+        if (_doctor!.rating != null)
+          Expanded(
+            child: _buildStatCard(
+              icon: Icons.star_rounded,
+              iconColor: Colors.amber,
+              value: _doctor!.rating!.toStringAsFixed(1),
+              label: 'Rating',
+              bgColor: Colors.amber.withOpacity(0.1),
+            ),
+          ),
+        SizedBox(width: 12.w),
+        
+        // Reviews Card
+        if (_doctor!.reviewCount != null)
+          Expanded(
+            child: _buildStatCard(
+              icon: Icons.people_rounded,
+              iconColor: AppColors.primary,
+              value: _doctor!.reviewCount.toString(),
+              label: 'Reviews',
+              bgColor: AppColors.primary.withOpacity(0.1),
+            ),
+          ),
+        SizedBox(width: 12.w),
+        
+        // Experience Card
+        if (_doctor!.yearsOfExperience != null)
+          Expanded(
+            child: _buildStatCard(
+              icon: Icons.workspace_premium_rounded,
+              iconColor: Colors.green,
+              value: '${_doctor!.yearsOfExperience}+',
+              label: 'Years Exp.',
+              bgColor: Colors.green.withOpacity(0.1),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required Color iconColor,
+    required String value,
+    required String label,
+    required Color bgColor,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 12.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.all(10.w),
+            decoration: BoxDecoration(
+              color: bgColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 22.sp),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20.sp,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 2.h),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.sp,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('About Doctor', Icons.info_outline),
+          SizedBox(height: 12.h),
+          Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                if (_doctor!.yearsOfExperience != null)
+                  _buildInfoRowModern(
+                    Icons.work_history_rounded,
+                    'Experience',
+                    '${_doctor!.yearsOfExperience} years of experience',
+                    Colors.blue,
+                  ),
+                if (_doctor!.languages != null && _doctor!.languages!.isNotEmpty) ...[
+                  if (_doctor!.yearsOfExperience != null)
+                    Divider(height: 24.h, color: Colors.grey[200]),
+                  _buildInfoRowModern(
+                    Icons.translate_rounded,
+                    'Languages',
+                    _doctor!.languages!.join(', '),
+                    Colors.purple,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          SizedBox(height: 20.h),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConsultationFeeCard() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      child: Container(
+        margin: EdgeInsets.only(bottom: 20.h),
+        padding: EdgeInsets.all(16.w),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primary,
+              AppColors.primary.withOpacity(0.8),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16.r),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Icon(
+                Icons.payments_rounded,
+                color: Colors.white,
+                size: 28.sp,
+              ),
+            ),
+            SizedBox(width: 16.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Consultation Fee',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 13.sp,
+                    ),
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    '${_doctor!.consultationFee} TND',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20.r),
+              ),
+              child: Text(
+                'Per Visit',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.sp,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClinicSection() {
+    if (_doctor!.clinicName == null && _doctor!.clinicAddress == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Clinic Information', Icons.local_hospital_outlined),
+          SizedBox(height: 12.h),
+          Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                if (_doctor!.clinicName != null)
+                  _buildInfoRowModern(
+                    Icons.business_rounded,
+                    'Clinic Name',
+                    _doctor!.clinicName!,
+                    Colors.teal,
+                  ),
+                if (_doctor!.clinicName != null && _doctor!.clinicAddress != null)
+                  Divider(height: 24.h, color: Colors.grey[200]),
+                if (_doctor!.clinicAddress != null)
+                  _buildInfoRowModern(
+                    Icons.location_on_rounded,
+                    'Address',
+                    _doctor!.clinicAddress!.fullAddress,
+                    Colors.red,
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(height: 20.h),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.primary, size: 22.sp),
+        SizedBox(width: 8.w),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18.sp,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRowModern(IconData icon, String label, String value, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: EdgeInsets.all(8.w),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10.r),
+          ),
+          child: Icon(icon, color: color, size: 20.sp),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: Colors.grey[600],
+                ),
+              ),
+              SizedBox(height: 2.h),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildReviewsSection() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.w),
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -286,19 +663,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.star, color: Colors.amber, size: 24.sp),
-                  SizedBox(width: 8.w),
-                  Text(
-                    'Reviews & Ratings',
-                    style: TextStyle(
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
+              _buildSectionTitle('Patient Reviews', Icons.star_rounded),
               if (_reviews.length > 3)
                 TextButton(
                   onPressed: () => _showAllReviews(),
@@ -312,7 +677,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 ),
             ],
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 12.h),
 
           // Rating Stats Card
           if (_ratingStats != null) _buildRatingStatsCard(),
@@ -330,13 +695,13 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
 
   Widget _buildRatingStatsCard() {
     return Container(
-      padding: EdgeInsets.all(16.r),
+      padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -345,39 +710,46 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       child: Row(
         children: [
           // Average Rating
-          Column(
-            children: [
-              Text(
-                _ratingStats!.averageRating.toStringAsFixed(1),
-                style: TextStyle(
-                  fontSize: 48.sp,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+          Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  _ratingStats!.averageRating.toStringAsFixed(1),
+                  style: TextStyle(
+                    fontSize: 40.sp,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.amber[700],
+                  ),
                 ),
-              ),
-              Row(
-                children: List.generate(5, (index) {
-                  final filled = index < _ratingStats!.averageRating.floor();
-                  final partial = index == _ratingStats!.averageRating.floor() &&
-                      _ratingStats!.averageRating % 1 > 0;
-                  return Icon(
-                    partial ? Icons.star_half : (filled ? Icons.star : Icons.star_border),
-                    color: Colors.amber,
-                    size: 16.sp,
-                  );
-                }),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                '${_ratingStats!.totalReviews} reviews',
-                style: TextStyle(
-                  fontSize: 12.sp,
-                  color: AppColors.grey500,
+                Row(
+                  children: List.generate(5, (index) {
+                    final filled = index < _ratingStats!.averageRating.floor();
+                    final partial = index == _ratingStats!.averageRating.floor() &&
+                        _ratingStats!.averageRating % 1 > 0;
+                    return Icon(
+                      partial ? Icons.star_half_rounded : (filled ? Icons.star_rounded : Icons.star_outline_rounded),
+                      color: Colors.amber,
+                      size: 14.sp,
+                    );
+                  }),
                 ),
-              ),
-            ],
+                SizedBox(height: 4.h),
+                Text(
+                  '${_ratingStats!.totalReviews} reviews',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
           ),
-          SizedBox(width: 24.w),
+          SizedBox(width: 20.w),
           // Rating Breakdown
           Expanded(
             child: Column(
@@ -385,36 +757,40 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 final stars = 5 - index;
                 final percentage = _ratingStats!.getPercentage(stars);
                 return Padding(
-                  padding: EdgeInsets.only(bottom: 4.h),
+                  padding: EdgeInsets.only(bottom: 6.h),
                   child: Row(
                     children: [
                       Text(
                         '$stars',
                         style: TextStyle(
                           fontSize: 12.sp,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       SizedBox(width: 4.w),
-                      Icon(Icons.star, color: Colors.amber, size: 12.sp),
+                      Icon(Icons.star_rounded, color: Colors.amber, size: 12.sp),
                       SizedBox(width: 8.w),
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(4.r),
                           child: LinearProgressIndicator(
                             value: percentage,
-                            backgroundColor: AppColors.grey200,
+                            backgroundColor: Colors.grey[200],
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
-                            minHeight: 6.h,
+                            minHeight: 8.h,
                           ),
                         ),
                       ),
                       SizedBox(width: 8.w),
-                      Text(
-                        '${(percentage * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          color: AppColors.grey500,
+                      SizedBox(
+                        width: 35.w,
+                        child: Text(
+                          '${(percentage * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],

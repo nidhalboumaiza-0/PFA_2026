@@ -22,7 +22,8 @@ import {
   rejectReschedule,
   addDocumentToAppointment,
   removeDocumentFromAppointment,
-  getAppointmentDocuments
+  getAppointmentDocuments,
+  uploadDocumentFile
 } from '../controllers/appointmentController.js';
 import { auth, authorize } from '../../../../shared/index.js';
 import {
@@ -34,6 +35,7 @@ import {
   validateCancelAppointment,
   validateReferralBooking
 } from '../validators/appointmentValidator.js';
+import { uploadDocument } from '../config/multerConfig.js';
 
 const router = express.Router();
 
@@ -218,6 +220,14 @@ router.get(
 // ============================
 // DOCUMENT ROUTES
 // ============================
+
+// Upload document file (returns S3 URL)
+router.post(
+  '/upload-document',
+  auth,
+  uploadDocument.single('file'),
+  uploadDocumentFile
+);
 
 // Get appointment documents (both patient & doctor)
 router.get(

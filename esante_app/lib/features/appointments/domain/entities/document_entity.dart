@@ -96,25 +96,44 @@ class AppointmentDocumentEntity extends Equatable {
     this.uploadedAt,
   });
 
-  /// Check if document is an image
+  /// Check if document is an image (checks both URL and filename)
   bool get isImage {
-    final lowerUrl = url.toLowerCase();
-    return lowerUrl.endsWith('.jpg') ||
-        lowerUrl.endsWith('.jpeg') ||
-        lowerUrl.endsWith('.png') ||
-        lowerUrl.endsWith('.gif') ||
-        lowerUrl.endsWith('.webp');
+    // Check URL first (removing query params)
+    final urlWithoutParams = url.split('?').first.toLowerCase();
+    if (_isImageExtension(urlWithoutParams)) return true;
+    
+    // Also check filename
+    final lowerName = name.toLowerCase();
+    return _isImageExtension(lowerName);
   }
 
-  /// Check if document is a PDF
+  bool _isImageExtension(String path) {
+    return path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.png') ||
+        path.endsWith('.gif') ||
+        path.endsWith('.webp') ||
+        path.endsWith('.bmp');
+  }
+
+  /// Check if document is a PDF (checks both URL and filename)
   bool get isPdf {
-    return url.toLowerCase().endsWith('.pdf');
+    final urlWithoutParams = url.split('?').first.toLowerCase();
+    final lowerName = name.toLowerCase();
+    return urlWithoutParams.endsWith('.pdf') || lowerName.endsWith('.pdf');
   }
 
-  /// Get file extension
+  /// Get file extension from URL or name
   String get extension {
-    final parts = url.split('.');
-    return parts.isNotEmpty ? parts.last.toLowerCase() : '';
+    // Try URL first (without query params)
+    final urlWithoutParams = url.split('?').first;
+    final urlParts = urlWithoutParams.split('.');
+    if (urlParts.length > 1) {
+      return urlParts.last.toLowerCase();
+    }
+    // Fallback to name
+    final nameParts = name.split('.');
+    return nameParts.length > 1 ? nameParts.last.toLowerCase() : '';
   }
 
   @override

@@ -34,7 +34,9 @@ export const initializeSocketIO = (io) => {
 
       // Verify JWT token
       const decoded = jwt.verify(token, getConfig('JWT_SECRET'));
-      socket.userId = decoded.userId;
+      // Use profileId for messaging (conversations use profileId as participant IDs)
+      // Fall back to id/userId for backward compatibility
+      socket.userId = decoded.profileId || decoded.id || decoded.userId;
       socket.userRole = decoded.role;
       socket.token = token;
 
@@ -45,12 +47,24 @@ export const initializeSocketIO = (io) => {
     }
   });
 
+  // Debug: Log all incoming raw packets to understand "invalid payload" errors
+  io.engine.on('connection', (rawSocket) => {
+    rawSocket.on('message', (data) => {
+      // Only log first 200 chars to avoid spam
+      const preview = typeof data === 'string' 
+        ? data.substring(0, 200) 
+        : `[Binary: ${data?.length || 0} bytes]`;
+      console.log(`📦 Raw engine.io message: ${preview}`);
+    });
+  });
+
   // Connection event
   io.on('connection', async (socket) => {
     console.log(`✅ User connected: ${socket.userId} (${socket.userRole})`);
 
     // Add user to online users map
     onlineUsers.set(socket.userId, socket.id);
+    console.log(`📊 Online users after connection:`, Array.from(onlineUsers.keys()));
 
     // Set user as online in Redis (for cross-instance presence)
     try {
@@ -64,6 +78,7 @@ export const initializeSocketIO = (io) => {
 
     // User joins their own room for private messaging
     socket.join(socket.userId);
+    console.log(`🚪 User ${socket.userId} joined room: ${socket.userId}`);
 
     // Broadcast online status to user's contacts
     try {
@@ -144,8 +159,8 @@ export const initializeSocketIO = (io) => {
         // Get sender info
         const senderInfo = await getUserInfo(socket.userId, socket.token);
 
-        // Format message for response
-        const formattedMessage = formatMessageForResponse(message, senderInfo);
+        // Format message for response (async for signed URLs)
+        const formattedMessage = await formatMessageForResponse(message, senderInfo);
 
         // Emit confirmation to sender
         socket.emit('message_sent', {
@@ -153,9 +168,18 @@ export const initializeSocketIO = (io) => {
           messageId: message._id,
           timestamp: message.createdAt,
         });
+        console.log(`📤 message_sent emitted to sender ${socket.userId}`);
 
         // Emit to receiver (if online)
+        console.log(`📬 Checking if receiver ${receiverId} is online. onlineUsers:`, Array.from(onlineUsers.keys()));
         if (onlineUsers.has(receiverId)) {
+          const receiverSocketId = onlineUsers.get(receiverId);
+          const receiverSocket = io.sockets.sockets.get(receiverSocketId);
+          console.log(`📤 Receiver socket exists: ${!!receiverSocket}, socketId: ${receiverSocketId}`);
+          if (receiverSocket) {
+            console.log(`📤 Receiver socket rooms:`, Array.from(receiverSocket.rooms));
+          }
+          console.log(`📤 Emitting new_message to receiver ${receiverId}`);
           io.to(receiverId).emit('new_message', formattedMessage);
 
           // Mark as delivered immediately
@@ -167,6 +191,7 @@ export const initializeSocketIO = (io) => {
             messageId: message._id,
             deliveredAt: message.deliveredAt,
           });
+          console.log(`📤 message_delivered emitted to sender`);
 
           // Publish Kafka event
           await publishToKafka(KAFKA_TOPICS.MESSAGE.MESSAGE_DELIVERED, {
@@ -185,6 +210,7 @@ export const initializeSocketIO = (io) => {
           messageId: message._id.toString(),
           conversationId,
           senderId: socket.userId,
+          senderName: senderInfo?.fullName || senderInfo?.name || 'Someone',
           receiverId,
           messageType,
           timestamp: Date.now(),
@@ -202,9 +228,12 @@ export const initializeSocketIO = (io) => {
     // Handle typing_start event
     socket.on('typing_start', async (payload) => {
       try {
+        console.log(`📝 typing_start received from ${socket.userId}:`, payload);
+        
         // Validate payload
         const { error, value } = typingEventSchema.validate(payload);
         if (error) {
+          console.log(`❌ typing_start validation error:`, error.details[0].message);
           return socket.emit('error', {
             event: 'typing_start',
             message: error.details[0].message,
@@ -212,15 +241,21 @@ export const initializeSocketIO = (io) => {
         }
 
         const { conversationId, receiverId } = value;
+        console.log(`📝 typing_start: sender=${socket.userId}, receiver=${receiverId}, conv=${conversationId}`);
 
         // Verify user is participant in conversation
         const conversation = await Conversation.findById(conversationId);
         if (!conversation || !conversation.isParticipant(socket.userId)) {
+          console.log(`❌ typing_start: User ${socket.userId} not participant in ${conversationId}`);
           return;
         }
 
         // Get sender info for display
         const senderInfo = await getUserInfo(socket.userId, socket.token);
+        
+        // Check if receiver is online
+        const isReceiverOnline = onlineUsers.has(receiverId);
+        console.log(`📝 typing_start: receiverId=${receiverId}, isOnline=${isReceiverOnline}, onlineUsers=`, Array.from(onlineUsers.keys()));
 
         // Emit to receiver only
         io.to(receiverId).emit('user_typing', {
@@ -228,6 +263,7 @@ export const initializeSocketIO = (io) => {
           userId: socket.userId,
           userName: senderInfo?.fullName || senderInfo?.name || 'User',
         });
+        console.log(`📤 user_typing emitted to room ${receiverId}`);
       } catch (error) {
         console.error('Error in typing_start handler:', error);
       }
@@ -290,15 +326,35 @@ export const initializeSocketIO = (io) => {
           });
         }
 
+        // If messageIds not provided, find all unread messages in conversation
+        let targetMessageIds = messageIds;
+        if (!targetMessageIds || targetMessageIds.length === 0) {
+          const unreadMessages = await Message.find({
+            conversationId,
+            senderId: { $ne: socket.userId },
+            isRead: false,
+          }).select('_id');
+          targetMessageIds = unreadMessages.map((m) => m._id);
+        }
+
+        // If no messages to mark as read, still emit success
+        if (!targetMessageIds || targetMessageIds.length === 0) {
+          return socket.emit('mark_as_read_success', {
+            conversationId,
+            messageIds: [],
+            count: 0,
+          });
+        }
+
         // Mark messages as read
-        await Message.markMultipleAsRead(messageIds, socket.userId);
+        await Message.markMultipleAsRead(targetMessageIds, socket.userId);
 
         // Reset unread count for user in conversation
         conversation.resetUnreadCount(socket.userId);
         await conversation.save();
 
         // Get messages to find senders
-        const messages = await Message.find({ _id: { $in: messageIds } });
+        const messages = await Message.find({ _id: { $in: targetMessageIds } });
         const senderIds = [...new Set(messages.map((msg) => msg.senderId.toString()))];
 
         // Emit to senders
@@ -307,7 +363,7 @@ export const initializeSocketIO = (io) => {
           if (senderId !== socket.userId && onlineUsers.has(senderId)) {
             io.to(senderId).emit('messages_read', {
               conversationId,
-              messageIds,
+              messageIds: targetMessageIds,
               readBy: socket.userId,
               readAt,
             });
@@ -318,7 +374,7 @@ export const initializeSocketIO = (io) => {
         await publishToKafka(KAFKA_TOPICS.MESSAGE.MESSAGE_READ, {
           eventType: 'message.read',
           conversationId,
-          messageIds,
+          messageIds: targetMessageIds,
           readBy: socket.userId,
           readAt: Date.now(),
         });
@@ -326,7 +382,8 @@ export const initializeSocketIO = (io) => {
         // Confirm to sender
         socket.emit('mark_as_read_success', {
           conversationId,
-          messageIds,
+          messageIds: targetMessageIds,
+          count: targetMessageIds.length,
         });
       } catch (error) {
         console.error('Error in mark_as_read handler:', error);
@@ -354,8 +411,8 @@ export const initializeSocketIO = (io) => {
     });
 
     // Handle disconnect event
-    socket.on('disconnect', async () => {
-      console.log(`❌ User disconnected: ${socket.userId}`);
+    socket.on('disconnect', async (reason) => {
+      console.log(`❌ User disconnected: ${socket.userId}, reason: ${reason}`);
 
       // Remove from online users map
       onlineUsers.delete(socket.userId);

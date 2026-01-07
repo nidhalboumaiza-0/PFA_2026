@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import { mongoose } from '../../../../shared/index.js';
 
 const reviewSchema = new mongoose.Schema({
     appointmentId: {

@@ -69,6 +69,12 @@ export const serviceConfig = {
     public: false,
     fallbackUrl: 'http://127.0.0.1:3003'
   },
+  reviews: {
+    serviceName: 'rdv-service',
+    path: '/api/v1/reviews',
+    public: false,
+    fallbackUrl: 'http://127.0.0.1:3003'
+  },
   medical: {
     serviceName: 'medical-records-service',
     path: '/api/v1/medical',
@@ -85,6 +91,13 @@ export const serviceConfig = {
     serviceName: 'messaging-service',
     path: '/api/v1/messages',
     public: false,
+    fallbackUrl: 'http://127.0.0.1:3006'
+  },
+  messaging: {
+    serviceName: 'messaging-service',
+    path: '/api/v1/messaging',
+    public: false,
+    adminOnly: true,
     fallbackUrl: 'http://127.0.0.1:3006'
   },
   notifications: {

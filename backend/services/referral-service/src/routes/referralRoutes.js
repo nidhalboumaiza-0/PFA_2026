@@ -108,7 +108,7 @@ router.put(
 router.get(
   '/statistics',
   auth,
-  authorize('doctor'),
+  authorize('doctor', 'admin'),
   getReferralStatistics
 );
 

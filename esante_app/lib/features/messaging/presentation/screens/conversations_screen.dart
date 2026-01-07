@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
-import '../../../../injection_container.dart';
 import '../../domain/entities/conversation_entity.dart';
 import '../bloc/messaging_bloc.dart';
 import '../bloc/messaging_event.dart';
@@ -11,15 +11,27 @@ import '../bloc/messaging_state.dart';
 import 'chat_screen.dart';
 
 /// Screen showing list of conversations
-class ConversationsScreen extends StatelessWidget {
+class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
 
   @override
+  State<ConversationsScreen> createState() => _ConversationsScreenState();
+}
+
+class _ConversationsScreenState extends State<ConversationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Always refresh conversations when screen is initialized
+    // Use forceEmit to ensure state updates even if we were in chat
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<MessagingBloc>().add(const LoadConversations(refresh: true, forceEmit: true));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<MessagingBloc>()..add(const LoadConversations()),
-      child: const _ConversationsView(),
-    );
+    return const _ConversationsView();
   }
 }
 
@@ -28,17 +40,9 @@ class _ConversationsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
       appBar: CustomAppBar(
         title: 'Messages',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearchDialog(context),
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -69,7 +73,15 @@ class _ConversationsView extends StatelessWidget {
               );
             }
 
-            // Initial state
+            // For other states (like MessagesLoaded), use cached conversations
+            final cachedConversations = context.read<MessagingBloc>().conversations;
+            if (cachedConversations.isNotEmpty) {
+              return _ConversationsList(
+                conversations: cachedConversations,
+              );
+            }
+
+            // Initial state - trigger load
             return const _LoadingView();
           },
         ),
@@ -105,9 +117,15 @@ class _ConversationShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+    
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 8.h),
-      child: ShimmerLoading(
+      child: Shimmer.fromColors(
+        baseColor: baseColor,
+        highlightColor: highlightColor,
         child: Row(
           children: [
             CircleAvatar(radius: 28.r),
@@ -168,14 +186,14 @@ class _ErrorView extends StatelessWidget {
             ),
             SizedBox(height: 16.h),
             AppBodyText(
-              message,
+              text: message,
               textAlign: TextAlign.center,
             ),
             SizedBox(height: 24.h),
             CustomButton(
               text: 'Retry',
               onPressed: onRetry,
-              type: ButtonType.outlined,
+              isOutlined: true,
             ),
           ],
         ),
@@ -209,7 +227,7 @@ class _EmptyView extends StatelessWidget {
             ),
             SizedBox(height: 8.h),
             AppBodyText(
-              'Start a conversation with your doctor or patients',
+              text: 'Start a conversation with your doctor or patients',
               textAlign: TextAlign.center,
               color: AppColors.textSecondaryStatic,
             ),
@@ -258,6 +276,7 @@ class _ConversationsList extends StatelessWidget {
           recipientId: recipientId,
           recipientName: conversation.displayName,
           recipientAvatarUrl: conversation.avatarUrl,
+          recipientType: conversation.otherParticipant?.role ?? 'doctor',
         ),
       ),
     );
@@ -324,7 +343,7 @@ class _ConversationTile extends StatelessWidget {
         children: [
           Expanded(
             child: AppBodyText(
-              conversation.displayName,
+              text: conversation.displayName,
               fontWeight: hasUnread ? FontWeight.bold : FontWeight.w500,
               fontSize: 16.sp,
               maxLines: 1,
@@ -440,7 +459,7 @@ class _SearchMessagesDialogState extends State<_SearchMessagesDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: AppBodyText('Cancel', color: AppColors.textSecondaryStatic),
+          child: AppBodyText(text: 'Cancel', color: AppColors.textSecondaryStatic),
         ),
         CustomButton(
           text: 'Search',

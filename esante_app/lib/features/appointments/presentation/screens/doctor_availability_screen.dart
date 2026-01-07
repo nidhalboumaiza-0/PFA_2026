@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'dart:convert';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
@@ -323,27 +324,18 @@ class _DoctorAvailabilityViewState extends State<_DoctorAvailabilityView>
   }
 
   Widget _buildErrorState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 64.sp, color: AppColors.error),
-          SizedBox(height: 16.h),
-          const AppSubtitle(text: 'Failed to load schedule'),
-          SizedBox(height: 16.h),
-          CustomButton(
-            text: 'Retry',
-            onPressed: () {
-              context.read<DoctorAppointmentBloc>().add(
-                LoadDoctorSchedule(
-                  startDate: DateTime.now(),
-                  endDate: DateTime.now().add(const Duration(days: 90)),
-                ),
-              );
-            },
+    return ErrorStateWidget(
+      title: 'Unable to load schedule',
+      message: 'We couldn\'t fetch your availability schedule. Please try again.',
+      imagePath: AppAssets.doctorAmicoImage,
+      onRetry: () {
+        context.read<DoctorAppointmentBloc>().add(
+          LoadDoctorSchedule(
+            startDate: DateTime.now(),
+            endDate: DateTime.now().add(const Duration(days: 90)),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

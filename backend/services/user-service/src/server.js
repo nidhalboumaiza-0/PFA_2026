@@ -2,12 +2,16 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import http from 'http';
 import { connectDB, errorHandler, requestLogger, bootstrap, getConfig, getMongoUri } from '../../../shared/index.js';
 import userRoutes from './routes/userRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import { initializeConsumer } from './consumers/userConsumer.js';
 import { initializeS3 } from './services/s3Service.js';
+import { initializeSocket } from './socket/index.js';
 
 const app = express();
+const server = http.createServer(app);
 const SERVICE_NAME = 'user-service';
 
 // Middleware
@@ -29,6 +33,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/users/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -60,13 +65,17 @@ const startServer = async () => {
     
     const PORT = getConfig('PORT', '3002');
     
-    app.listen(PORT, () => {
+    // Initialize Socket.IO for real-time admin updates
+    initializeSocket(server);
+    
+    server.listen(PORT, () => {
       console.log(`
-╔════════════════════════════════════════╗
-║   👥 USER SERVICE STARTED 👥           ║
-║   Port: ${PORT}                         ║
-║   Environment: ${getConfig('NODE_ENV')} ║
-╚════════════════════════════════════════╝
+╔════════════════════════════════════════════╗
+║   👥 USER SERVICE STARTED 👥               ║
+║   Port: ${PORT}                             ║
+║   Socket.IO: /user-socket                  ║
+║   Environment: ${getConfig('NODE_ENV')}    ║
+╚════════════════════════════════════════════╝
       `);
     });
   } catch (error) {

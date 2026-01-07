@@ -6,6 +6,7 @@ class HiveStorageService {
   static const String _authBoxName = 'auth_box';
   static const String _userBoxName = 'user_box';
   static const String _keyUser = 'cached_user';
+  static const String _keyAccessToken = 'access_token';
 
   static Box<String>? _authBox;
   static Box<String>? _userBox;
@@ -43,12 +44,50 @@ class HiveStorageService {
   /// Get the current logged-in user's ID
   static String? getCurrentUserId() {
     try {
+      // First try to get profileId from JWT token (this is what messages use)
+      final profileId = getProfileIdFromToken();
+      if (profileId != null) {
+        return profileId;
+      }
+      
+      // Fallback to cached user id
       final userJson = _userBox?.get(_keyUser);
       if (userJson == null) return null;
       final userMap = jsonDecode(userJson) as Map<String, dynamic>;
       return userMap['id'] as String?;
     } catch (e) {
       print('[HiveStorageService.getCurrentUserId] Error: $e');
+      return null;
+    }
+  }
+
+  /// Get profileId from the JWT access token
+  /// Messages use profileId as senderId, not userId
+  static String? getProfileIdFromToken() {
+    try {
+      final token = _authBox?.get(_keyAccessToken);
+      if (token == null) return null;
+      
+      // Decode JWT (format: header.payload.signature)
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      
+      // Decode the payload (middle part)
+      String payload = parts[1];
+      // Add padding if needed for base64 decoding
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      
+      final decoded = utf8.decode(base64Url.decode(payload));
+      final payloadMap = jsonDecode(decoded) as Map<String, dynamic>;
+      
+      // Return profileId - this is what the messaging service uses
+      final profileId = payloadMap['profileId'] as String?;
+      print('[HiveStorageService.getProfileIdFromToken] profileId: $profileId');
+      return profileId;
+    } catch (e) {
+      print('[HiveStorageService.getProfileIdFromToken] Error: $e');
       return null;
     }
   }

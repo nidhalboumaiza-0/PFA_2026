@@ -174,7 +174,17 @@ class DoctorAppointmentBloc
   ) async {
     _log('_onNewAppointmentRequest', 'New appointment request received');
     
-    // Refresh appointment requests if we're on that view
+    // Always refresh statistics when new appointment comes in (for dashboard pending count)
+    final statsResult = await getAppointmentStatisticsUseCase(const NoParams());
+    statsResult.fold(
+      (failure) => _log('_onNewAppointmentRequest', 'Stats refresh failed: ${failure.message}'),
+      (stats) {
+        _log('_onNewAppointmentRequest', 'Stats refreshed: pending=${stats.pendingCount}');
+        emit(StatisticsLoaded(statistics: stats));
+      },
+    );
+    
+    // Also refresh appointment requests if we're on that view
     final currentState = state;
     if (currentState is AppointmentRequestsLoaded) {
       final result = await getAppointmentRequestsUseCase(

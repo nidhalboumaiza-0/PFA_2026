@@ -55,6 +55,9 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
   
   // Document attachments
   List<PendingDocumentAttachment> _attachments = [];
+  
+  // Cache the availability state to preserve it during loading/error states
+  DoctorAvailabilityLoaded? _cachedAvailability;
 
   @override
   void dispose() {
@@ -77,6 +80,9 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
       ),
       body: BlocConsumer<PatientAppointmentBloc, PatientAppointmentState>(
         listener: (context, state) {
+          if (state is DoctorAvailabilityLoaded) {
+            _cachedAvailability = state;
+          }
           if (state is AppointmentRequestSuccess) {
             AppSnackBar.success(context, 'Appointment requested successfully!');
             Navigator.pop(context, true);
@@ -105,29 +111,25 @@ class _BookAppointmentViewState extends State<_BookAppointmentView> {
               ),
             );
           }
+          
+          // If we have cached availability and we're in an error state, show the form again
+          if (_cachedAvailability != null && state is PatientAppointmentError) {
+            return _buildContent(context, _cachedAvailability!);
+          }
 
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64.sp, color: AppColors.error),
-                SizedBox(height: 16.h),
-                const AppSubtitle(text: 'Failed to load availability'),
-                SizedBox(height: 16.h),
-                CustomButton(
-                  text: 'Retry',
-                  onPressed: () {
-                    context.read<PatientAppointmentBloc>().add(
-                          LoadDoctorAvailability(
-                            doctorId: widget.doctor.id,
-                            startDate: DateTime.now(),
-                            endDate: DateTime.now().add(const Duration(days: 30)),
-                          ),
-                        );
-                  },
-                ),
-              ],
-            ),
+          return ErrorStateWidget(
+            title: 'Unable to load availability',
+            message: 'We couldn\'t fetch the doctor\'s available time slots. Please try again.',
+            imagePath: AppAssets.onlineDoctorPanaImage,
+            onRetry: () {
+              context.read<PatientAppointmentBloc>().add(
+                    LoadDoctorAvailability(
+                      doctorId: widget.doctor.id,
+                      startDate: DateTime.now(),
+                      endDate: DateTime.now().add(const Duration(days: 30)),
+                    ),
+                  );
+            },
           );
         },
       ),

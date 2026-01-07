@@ -118,7 +118,7 @@ class ConversationModel extends ConversationEntity {
     }
 
     return ConversationModel(
-      id: json['_id'] ?? json['id'] ?? '',
+      id: json['_id'] ?? json['id'] ?? json['conversationId'] ?? '',
       participantIds: participantIds,
       conversationType: json['conversationType'] ?? 'patient_doctor',
       otherParticipant: otherParticipant,

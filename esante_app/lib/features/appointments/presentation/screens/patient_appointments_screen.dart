@@ -49,6 +49,9 @@ class _PatientAppointmentsView extends StatefulWidget {
 class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
+  // Cache appointments to preserve them during error states
+  PatientAppointmentsLoaded? _cachedAppointments;
 
   @override
   void initState() {
@@ -104,6 +107,9 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
           Expanded(
             child: BlocConsumer<PatientAppointmentBloc, PatientAppointmentState>(
               listener: (context, state) {
+                if (state is PatientAppointmentsLoaded) {
+                  _cachedAppointments = state;
+                }
                 if (state is AppointmentCancelled) {
                   AppSnackBar.success(context, 'Appointment cancelled');
                   context.read<PatientAppointmentBloc>().add(
@@ -119,7 +125,48 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
                 }
               },
               builder: (context, state) {
+                // For action states (loading, cancelled, reschedule sent), show cached data
+                if (state is AppointmentActionLoading || 
+                    state is AppointmentCancelled || 
+                    state is RescheduleRequestSent) {
+                  if (_cachedAppointments != null) {
+                    return TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildAppointmentsList(
+                          context,
+                          _cachedAppointments!.upcomingAppointments,
+                          isUpcoming: true,
+                        ),
+                        _buildAppointmentsList(
+                          context,
+                          _cachedAppointments!.pastAppointments,
+                          isUpcoming: false,
+                        ),
+                      ],
+                    );
+                  }
+                }
+                
                 if (state is PatientAppointmentsLoading) {
+                  // Show cached data while loading if available
+                  if (_cachedAppointments != null) {
+                    return TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildAppointmentsList(
+                          context,
+                          _cachedAppointments!.upcomingAppointments,
+                          isUpcoming: true,
+                        ),
+                        _buildAppointmentsList(
+                          context,
+                          _cachedAppointments!.pastAppointments,
+                          isUpcoming: false,
+                        ),
+                      ],
+                    );
+                  }
                   return const Center(child: CircularProgressIndicator());
                 }
 
@@ -140,25 +187,32 @@ class _PatientAppointmentsViewState extends State<_PatientAppointmentsView>
                     ],
                   );
                 }
-
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                
+                // If we have cached appointments during error state, show them
+                if (_cachedAppointments != null && state is PatientAppointmentError) {
+                  return TabBarView(
+                    controller: _tabController,
                     children: [
-                      Icon(Icons.error_outline, size: 64.sp, color: AppColors.error),
-                      SizedBox(height: 16.h),
-                      const AppSubtitle(text: 'Failed to load appointments'),
-                      SizedBox(height: 16.h),
-                      CustomButton(
-                        text: 'Retry',
-                        onPressed: () {
-                          context.read<PatientAppointmentBloc>().add(
-                                const LoadPatientAppointments(),
-                              );
-                        },
+                      _buildAppointmentsList(
+                        context,
+                        _cachedAppointments!.upcomingAppointments,
+                        isUpcoming: true,
+                      ),
+                      _buildAppointmentsList(
+                        context,
+                        _cachedAppointments!.pastAppointments,
+                        isUpcoming: false,
                       ),
                     ],
-                  ),
+                  );
+                }
+
+                return ErrorStateWidget.appointments(
+                  onRetry: () {
+                    context.read<PatientAppointmentBloc>().add(
+                          const LoadPatientAppointments(),
+                        );
+                  },
                 );
               },
             ),

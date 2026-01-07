@@ -4,7 +4,12 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
+import '../../../messaging/presentation/bloc/messaging_bloc.dart';
+import '../../../messaging/presentation/bloc/messaging_event.dart';
+import '../../../messaging/presentation/bloc/messaging_state.dart';
 import '../../../messaging/presentation/screens/conversations_screen.dart';
+import '../../../notifications/presentation/bloc/notification_bloc.dart';
+import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../profile/domain/entities/patient_profile_entity.dart';
 import '../../../profile/domain/usecases/check_profile_completion_usecase.dart';
 import '../../../profile/presentation/blocs/patient_profile/patient_profile_bloc.dart';
@@ -31,12 +36,17 @@ class PatientDashboardContent extends StatefulWidget {
 
 class _PatientDashboardContentState extends State<PatientDashboardContent> {
   late final PatientProfileBloc _profileBloc;
+  late final MessagingBloc _messagingBloc;
   
   @override
   void initState() {
     super.initState();
     _profileBloc = sl<PatientProfileBloc>();
     _profileBloc.add(LoadPatientProfile());
+    
+    // Get messaging bloc and fetch unread count
+    _messagingBloc = sl<MessagingBloc>();
+    _messagingBloc.add(const GetUnreadCount());
     
     if (widget.showProfileCompletionDialog) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -89,33 +99,73 @@ class _PatientDashboardContentState extends State<PatientDashboardContent> {
                 centerTitle: true,
               ),
               actions: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ConversationsScreen(),
-                      ),
+                // Messages icon with unread badge
+                BlocBuilder<MessagingBloc, MessagingState>(
+                  bloc: _messagingBloc,
+                  buildWhen: (previous, current) => 
+                    current is UnreadCountLoaded || current is ConversationsLoaded,
+                  builder: (context, state) {
+                    final unreadCount = _messagingBloc.unreadCount;
+                    return IconButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ConversationsScreen(),
+                          ),
+                        );
+                      },
+                      icon: unreadCount > 0
+                          ? Badge(
+                              label: unreadCount > 99 
+                                  ? const Text('99+') 
+                                  : Text(unreadCount.toString()),
+                              child: Icon(
+                                Icons.chat_bubble_outline,
+                                size: 24.sp,
+                              ),
+                            )
+                          : Icon(
+                              Icons.chat_bubble_outline,
+                              size: 24.sp,
+                            ),
+                      tooltip: 'Messages',
                     );
                   },
-                  icon: Badge(
-                    smallSize: 8.r,
-                    child: Icon(
-                      Icons.chat_bubble_outline,
-                      size: 24.sp,
-                    ),
-                  ),
-                  tooltip: 'Messages',
                 ),
-                IconButton(
-                  onPressed: () {
-                    // TODO: Navigate to notifications
-                  },
-                  icon: Badge(
-                    smallSize: 8.r,
-                    child: Icon(
-                      Icons.notifications_outlined,
-                      size: 24.sp,
-                    ),
+                // Notifications icon with real unread count
+                BlocProvider(
+                  create: (_) => sl<NotificationBloc>()..add(const RefreshUnreadCount()),
+                  child: BlocBuilder<NotificationBloc, NotificationState>(
+                    builder: (context, state) {
+                      final unreadCount = state is NotificationsLoaded 
+                          ? state.unreadCount 
+                          : 0;
+                      return IconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                        icon: unreadCount > 0
+                            ? Badge(
+                                label: unreadCount > 99
+                                    ? const Text('99+')
+                                    : Text(unreadCount.toString()),
+                                child: Icon(
+                                  Icons.notifications_outlined,
+                                  size: 24.sp,
+                                ),
+                              )
+                            : Icon(
+                                Icons.notifications_outlined,
+                                size: 24.sp,
+                              ),
+                        tooltip: 'Notifications',
+                      );
+                    },
                   ),
                 ),
                 SizedBox(width: 8.w),

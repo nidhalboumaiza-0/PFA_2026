@@ -164,6 +164,7 @@ abstract class AppointmentRepository {
   Future<Either<Failure, String>> uploadDocumentFile({
     required String filePath,
     required String fileName,
+    required String appointmentId,
   });
 }
 

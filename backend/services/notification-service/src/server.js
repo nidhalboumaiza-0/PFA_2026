@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import notificationRoutes from './routes/notificationRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import { sendAdminAlert } from './controllers/adminController.js';
 import { initializeSocket } from './socket/socket.js';
 import { setSocketIO } from './services/notificationService.js';
 import { startNotificationConsumer, disconnectConsumer } from './kafka/notificationConsumer.js';
@@ -26,8 +28,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+// Service-to-service endpoint (no auth required - internal use only)
+// Called by audit-service for critical admin alerts
+app.post('/api/v1/notifications/admin-alert', sendAdminAlert);
+
 // Routes
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/notifications/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {

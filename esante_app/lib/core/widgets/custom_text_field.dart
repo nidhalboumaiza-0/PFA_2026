@@ -93,7 +93,9 @@ class _CustomTextFieldState extends State<CustomTextField> {
         TextFormField(
           controller: widget.controller,
           obscureText: widget.isPassword ? _obscureText : false,
-          keyboardType: widget.keyboardType,
+          keyboardType: (widget.maxLines > 1 || widget.textInputAction == TextInputAction.newline)
+              ? TextInputType.multiline
+              : widget.keyboardType,
           validator: widget.validator,
           enabled: widget.enabled,
           maxLines: widget.isPassword ? 1 : widget.maxLines,

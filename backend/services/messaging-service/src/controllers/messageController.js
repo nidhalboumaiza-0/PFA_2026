@@ -2,7 +2,7 @@ import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import { publishToKafka } from '../../../../shared/kafka/producer.js';
 import { KAFKA_TOPICS } from '../../../../shared/kafka/topics.js';
-import { sendError, sendSuccess } from '../../../../shared/index.js';
+import { mongoose, sendError, sendSuccess } from '../../../../shared/index.js';
 import {
   getUserInfo,
   formatConversationForResponse,
@@ -64,8 +64,13 @@ export const createOrGetConversation = async (req, res) => {
       a.toString().localeCompare(b.toString())
     );
 
+    // Convert to ObjectIds for query (participants are stored as ObjectIds in DB)
+    const participantsObjectIds = participants.map(id => 
+      mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+    );
+
     // Check if conversation already exists
-    let conversation = await Conversation.findOne({ participants });
+    let conversation = await Conversation.findOne({ participants: participantsObjectIds });
 
     if (conversation) {
       // Return existing conversation
@@ -255,11 +260,13 @@ export const getConversationMessages = async (req, res) => {
       }
     });
 
-    // Format messages
-    const formattedMessages = messages.map((msg) => {
-      const senderInfo = sendersMap[msg.senderId.toString()];
-      return formatMessageForResponse(msg, senderInfo);
-    });
+    // Format messages (async - need to use Promise.all)
+    const formattedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        const senderInfo = sendersMap[msg.senderId.toString()];
+        return await formatMessageForResponse(msg, senderInfo);
+      })
+    );
 
     // Calculate pagination
     const pagination = calculatePagination(page, limit, totalMessages);
@@ -282,12 +289,13 @@ export const getConversationMessages = async (req, res) => {
 /**
  * Mark messages as read (REST endpoint)
  * PUT /api/v1/messages/conversations/:conversationId/mark-read
+ * If messageIds not provided, marks all unread messages in conversation as read
  */
 export const markMessagesAsRead = async (req, res) => {
   try {
     const currentUserId = req.user.profileId;
     const { conversationId } = req.params;
-    const { messageIds } = req.body;
+    let { messageIds } = req.body;
 
     // Find conversation and verify user is participant
     const conversation = await Conversation.findById(conversationId);
@@ -299,6 +307,26 @@ export const markMessagesAsRead = async (req, res) => {
     if (!conversation.isParticipant(currentUserId)) {
       return sendError(res, 403, 'FORBIDDEN',
         'You are not part of this conversation.');
+    }
+
+    // If messageIds not provided, find all unread messages in this conversation
+    if (!messageIds || messageIds.length === 0) {
+      const unreadMessages = await Message.find({
+        conversationId,
+        senderId: { $ne: currentUserId }, // Messages from other participants
+        'readBy.userId': { $ne: currentUserId }, // Not already read by current user
+      }).select('_id');
+      
+      messageIds = unreadMessages.map(msg => msg._id);
+      
+      if (messageIds.length === 0) {
+        // No unread messages, just reset count and return success
+        conversation.resetUnreadCount(currentUserId);
+        await conversation.save();
+        return res.status(200).json({
+          message: '0 messages marked as read',
+        });
+      }
     }
 
     // Mark messages as read
@@ -419,7 +447,7 @@ export const sendFileMessage = async (req, res) => {
     const io = req.app.get('io');
     const onlineUsersMap = req.app.get('onlineUsers');
 
-    const formattedMessage = formatMessageForResponse(message, senderInfo);
+    const formattedMessage = await formatMessageForResponse(message, senderInfo);
 
     if (onlineUsersMap.has(receiverId)) {
       io.to(receiverId).emit('new_message', formattedMessage);
@@ -586,11 +614,13 @@ export const searchMessages = async (req, res) => {
       }
     });
 
-    // Format messages
-    const formattedMessages = messages.map((msg) => {
-      const senderInfo = sendersMap[msg.senderId.toString()];
-      return formatMessageForResponse(msg, senderInfo);
-    });
+    // Format messages (async - need to use Promise.all)
+    const formattedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        const senderInfo = sendersMap[msg.senderId.toString()];
+        return await formatMessageForResponse(msg, senderInfo);
+      })
+    );
 
     // Calculate pagination
     const pagination = calculatePagination(page, limit, totalMessages);

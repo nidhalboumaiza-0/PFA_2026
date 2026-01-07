@@ -1,8 +1,8 @@
 import 'dart:io';
-import '../../../core/network/api_client.dart';
-import '../../../core/network/api_list.dart';
-import '../data/models/conversation_model.dart';
-import '../data/models/message_model.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_list.dart';
+import '../models/conversation_model.dart';
+import '../models/message_model.dart';
 
 /// Abstract class defining messaging data source operations
 abstract class MessagingRemoteDataSource {
@@ -35,6 +35,7 @@ abstract class MessagingRemoteDataSource {
   /// Send a file message (via REST API, not socket)
   Future<MessageModel> sendFileMessage({
     required String conversationId,
+    required String receiverId,
     required File file,
     String? caption,
   });
@@ -130,7 +131,9 @@ class MessagingRemoteDataSourceImpl implements MessagingRemoteDataSource {
       },
     );
 
-    final List<dynamic> messagesJson = response['data'] ?? [];
+    // API returns {data: {conversationId, messages: [...]}}
+    final data = response['data'];
+    final List<dynamic> messagesJson = data is Map ? (data['messages'] ?? []) : (data ?? []);
     return messagesJson.map((json) => MessageModel.fromJson(json)).toList();
   }
 
@@ -149,16 +152,24 @@ class MessagingRemoteDataSourceImpl implements MessagingRemoteDataSource {
   @override
   Future<MessageModel> sendFileMessage({
     required String conversationId,
+    required String receiverId,
     required File file,
     String? caption,
   }) async {
     _log('sendFileMessage', 'Sending file message to $conversationId');
+
+    // Determine messageType based on file extension
+    final extension = file.path.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(extension);
+    final messageType = isImage ? 'image' : 'document';
 
     final response = await _apiClient.uploadFile(
       ApiList.conversationSendFile(conversationId),
       file: file,
       fileFieldName: 'file',
       additionalData: {
+        'receiverId': receiverId,
+        'messageType': messageType,
         if (caption != null) 'caption': caption,
       },
     );
@@ -180,7 +191,8 @@ class MessagingRemoteDataSourceImpl implements MessagingRemoteDataSource {
     _log('getUnreadCount', 'Fetching unread count');
 
     final response = await _apiClient.get(ApiList.unreadCount);
-    return response['data']?['unreadCount'] ?? response['unreadCount'] ?? 0;
+    // API returns: {"data":{"totalUnread":1,"byConversation":[...]}}
+    return response['data']?['totalUnread'] ?? response['totalUnread'] ?? 0;
   }
 
   @override

@@ -593,6 +593,64 @@ export const updateOneSignalPlayerId = async (req, res, next) => {
 };
 
 /**
+ * Get user profile by profile ID (for internal service-to-service calls)
+ * GET /api/v1/users/profile/:profileId
+ * 
+ * Checks both Patient and Doctor collections
+ * Used by messaging-service to get participant info
+ */
+export const getProfileById = async (req, res, next) => {
+  try {
+    const { profileId } = req.params;
+
+    // Try to find as Patient first
+    let profile = await Patient.findById(profileId).select('-__v');
+    let role = 'patient';
+
+    // If not found, try Doctor
+    if (!profile) {
+      profile = await Doctor.findById(profileId).select('-__v');
+      role = 'doctor';
+    }
+
+    if (!profile) {
+      return sendError(res, 404, 'PROFILE_NOT_FOUND',
+        'The profile you are looking for does not exist.');
+    }
+
+    // Build response with common fields + role-specific fields
+    const responseData = {
+      _id: profile._id,
+      id: profile._id.toString(),
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      fullName: `${profile.firstName} ${profile.lastName}`,
+      name: `${profile.firstName} ${profile.lastName}`,
+      phone: profile.phone,
+      profilePhoto: profile.profilePhoto,
+      role: role,
+      userType: role,
+      isActive: profile.isActive,
+    };
+
+    // Add role-specific fields
+    if (role === 'doctor') {
+      responseData.specialty = profile.specialty;
+      responseData.title = profile.title;
+    } else {
+      responseData.gender = profile.gender;
+      responseData.dateOfBirth = profile.dateOfBirth;
+    }
+
+    res.status(200).json({
+      data: responseData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Get patient by ID (internal service-to-service call)
  * GET /api/v1/users/patients/:patientId
  * 

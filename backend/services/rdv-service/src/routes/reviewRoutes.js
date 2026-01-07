@@ -4,11 +4,42 @@ import {
     getDoctorReviews,
     getAppointmentReview,
     updateReview,
-    deleteReview
+    deleteReview,
+    getAllReviews,
+    adminDeleteReview,
+    getAdvancedStats
 } from '../controllers/reviewController.js';
 import { auth, authorize } from '../../../../shared/index.js';
 
 const router = express.Router();
+
+// ============================
+// ADMIN ROUTES (must be before dynamic routes)
+// ============================
+
+// Admin: Get advanced statistics
+router.get(
+    '/admin/stats',
+    auth,
+    authorize('admin'),
+    getAdvancedStats
+);
+
+// Admin: Get all reviews with stats
+router.get(
+    '/admin',
+    auth,
+    authorize('admin'),
+    getAllReviews
+);
+
+// Admin: Delete any review (moderation)
+router.delete(
+    '/admin/:reviewId',
+    auth,
+    authorize('admin'),
+    adminDeleteReview
+);
 
 // ============================
 // PUBLIC ROUTES

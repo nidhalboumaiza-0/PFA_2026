@@ -3,7 +3,7 @@ import AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
-import { cacheGet, cacheSet, getUserServiceUrl, getRdvServiceUrl, getConfig } from '../../../../shared/index.js';
+import { mongoose, cacheGet, cacheSet, getUserServiceUrl, getRdvServiceUrl, getConfig } from '../../../../shared/index.js';
 
 // Cache TTL
 const USER_INFO_CACHE_TTL = 600; // 10 minutes
@@ -16,12 +16,16 @@ let s3 = null;
  * Initialize S3 client with config from Consul
  */
 export const initializeS3 = () => {
-  s3 = new AWS.S3({
+  AWS.config.update({
+    region: getConfig('AWS_REGION'),
     accessKeyId: getConfig('AWS_ACCESS_KEY_ID'),
     secretAccessKey: getConfig('AWS_SECRET_ACCESS_KEY'),
-    region: getConfig('AWS_REGION'),
+    signatureVersion: 'v4'  // Required for most S3 regions
   });
-  console.log('✅ Messaging S3 client initialized with config from Consul');
+  s3 = new AWS.S3({
+    signatureVersion: 'v4'  // Also set on S3 client explicitly
+  });
+  console.log('✅ Messaging S3 client initialized with config from Consul (Signature v4)');
 };
 
 /**
@@ -69,8 +73,13 @@ export const getUserInfo = async (userId, token) => {
  */
 export const getContactsForUser = async (userId) => {
   try {
+    // Convert userId to ObjectId for proper matching with participants array
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) 
+      ? new mongoose.Types.ObjectId(userId) 
+      : userId;
+
     const conversations = await Conversation.find({
-      participants: userId,
+      participants: userObjectId,
       isActive: true,
     });
 
@@ -130,14 +139,17 @@ export const formatConversationForResponse = async (
 
 /**
  * Format message for API response
+ * Now async to support signed URL generation
  */
-export const formatMessageForResponse = (message, senderInfo) => {
+export const formatMessageForResponse = async (message, senderInfo) => {
   const formatted = {
     id: message._id,
     conversationId: message.conversationId,
     senderId: message.senderId,
     senderName: senderInfo?.fullName || senderInfo?.name || 'Unknown',
     senderType: message.senderType,
+    receiverId: message.receiverId,
+    receiverType: message.receiverType,
     messageType: message.messageType,
     content: message.content,
     isRead: message.isRead,
@@ -148,15 +160,19 @@ export const formatMessageForResponse = (message, senderInfo) => {
     editedAt: message.editedAt,
     isDeleted: message.isDeleted,
     createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
   };
 
-  // Include attachment if present
-  if (message.attachment && message.attachment.s3Url) {
+  // Include attachment if present - use signed URL for private S3 objects
+  if (message.attachment && message.attachment.s3Key) {
+    // Generate a signed URL that expires in 1 hour (3600 seconds)
+    const signedUrl = await getSignedUrl(message.attachment.s3Key, 3600);
     formatted.attachment = {
       fileName: message.attachment.fileName,
       fileSize: message.attachment.fileSize,
       mimeType: message.attachment.mimeType,
-      url: message.attachment.s3Url,
+      s3Key: message.attachment.s3Key,
+      url: signedUrl || message.attachment.s3Url,
     };
   }
 
@@ -173,8 +189,13 @@ export const formatMessageForResponse = (message, senderInfo) => {
  */
 export const calculateUnreadCount = async (userId) => {
   try {
+    // Convert userId to ObjectId for proper matching with participants array
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) 
+      ? new mongoose.Types.ObjectId(userId) 
+      : userId;
+
     const conversations = await Conversation.find({
-      participants: userId,
+      participants: userObjectId,
       isActive: true,
     });
 
@@ -206,8 +227,13 @@ export const calculateUnreadCount = async (userId) => {
  * Build query for filtering conversations
  */
 export const buildConversationQuery = (userId, filters) => {
+  // Convert userId to ObjectId for proper matching with participants array
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId) 
+    ? new mongoose.Types.ObjectId(userId) 
+    : userId;
+
   const query = {
-    participants: userId,
+    participants: userObjectId,
     isActive: true,
   };
 
@@ -274,16 +300,30 @@ export const deleteFileFromS3 = async (s3Key) => {
 
 /**
  * Generate signed URL for S3 file (for secure download)
+ * Matches the pattern from user-service for consistency
+ * @param {String} s3Key - S3 object key
+ * @param {Number} expiresIn - URL expiration in seconds (default: 3600 = 1 hour)
+ * @returns {Promise<String|null>} Signed URL or null if error
  */
-export const getSignedUrl = (s3Key, expiresIn = 3600) => {
+export const getSignedUrl = async (s3Key, expiresIn = 3600) => {
+  if (!s3Key) return null;
+  
   try {
+    // Extract S3 key from full URL if needed
+    let fileKey = s3Key;
+    if (s3Key.includes('amazonaws.com')) {
+      const urlParts = s3Key.split('.amazonaws.com/');
+      fileKey = urlParts[1] || s3Key;
+    }
+
     const params = {
       Bucket: getBucket(),
-      Key: s3Key,
+      Key: fileKey,
       Expires: expiresIn, // URL expires in seconds
     };
 
-    return s3.getSignedUrl('getObject', params);
+    const url = await s3.getSignedUrlPromise('getObject', params);
+    return url;
   } catch (error) {
     console.error('Error generating signed URL:', error.message);
     return null;
@@ -356,8 +396,9 @@ const checkPatientDoctorAppointmentHistory = async (patientId, doctorId) => {
   }
 
   try {
+    const rdvServiceUrl = await getRdvServiceUrl();
     const response = await axios.get(
-      `${RDV_SERVICE_URL}/api/v1/appointments/check-relationship`,
+      `${rdvServiceUrl}/api/v1/appointments/check-relationship`,
       {
         params: { patientId, doctorId }
       }

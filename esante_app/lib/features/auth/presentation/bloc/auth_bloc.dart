@@ -7,6 +7,7 @@ import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/entities/auth_tokens_entity.dart';
 import '../../../../core/error/failures.dart';
+import '../../../../core/services/push_notification_service.dart';
 
 part 'auth_event.dart';
 part 'auth_state.dart';
@@ -16,6 +17,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final ForgotPasswordUseCase forgotPasswordUseCase;
   final RegisterUseCase registerUseCase;
   final LogoutUseCase logoutUseCase;
+  final PushNotificationService _pushService = PushNotificationService();
 
   AuthBloc({
     required this.loginUseCase,
@@ -52,9 +54,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         _log('_onLoginRequested', 'Login failed: ${failure.message}');
         emit(AuthError(failure: failure));
       },
-      (data) {
+      (data) async {
         _log('_onLoginRequested', 'Login success! User: ${data.$1.email}');
         emit(AuthSuccess(user: data.$1, tokens: data.$2));
+        
+        // Register device for push notifications after successful login
+        _registerDeviceForPushNotifications(data.$1.id);
       },
     );
   }
@@ -107,6 +112,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     _log('_onLogoutRequested', 'Logout requested');
     emit(AuthLoading());
 
+    // Unregister device from push notifications before logout
+    await _unregisterDeviceFromPushNotifications();
+
     final result = await logoutUseCase(
       LogoutParams(sessionId: event.sessionId),
     );
@@ -122,5 +130,45 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(LogoutSuccess());
       },
     );
+  }
+
+  /// Register device for push notifications with backend
+  Future<void> _registerDeviceForPushNotifications(String userId) async {
+    try {
+      _log('_registerDeviceForPushNotifications', 'Registering device for user: $userId');
+      
+      // Set external user ID for targeting
+      await _pushService.setExternalUserId(userId);
+      
+      // Set user tags for segmentation
+      await _pushService.setUserTags({
+        'user_id': userId,
+        'logged_in': 'true',
+      });
+      
+      // Register device with backend
+      await _pushService.registerDeviceWithBackend();
+      
+      _log('_registerDeviceForPushNotifications', 'Device registration complete');
+    } catch (e) {
+      _log('_registerDeviceForPushNotifications', 'Error: $e');
+    }
+  }
+
+  /// Unregister device from push notifications
+  Future<void> _unregisterDeviceFromPushNotifications() async {
+    try {
+      _log('_unregisterDeviceFromPushNotifications', 'Unregistering device');
+      
+      // Remove external user ID
+      await _pushService.removeExternalUserId();
+      
+      // Unregister from backend
+      await _pushService.unregisterDeviceFromBackend();
+      
+      _log('_unregisterDeviceFromPushNotifications', 'Device unregistration complete');
+    } catch (e) {
+      _log('_unregisterDeviceFromPushNotifications', 'Error: $e');
+    }
   }
 }

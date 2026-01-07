@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "417582455838",
+    "project_id": "e-sante-22d88",
+    "storage_bucket": "e-sante-22d88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:417582455838:android:23114d7e2e5760c5d1620f",
+        "android_client_info": {
+          "package_name": "com.esante.esante_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKCmExfPi9vkMjBiFdKKy7OtyifcpNL0Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

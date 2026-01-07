@@ -106,9 +106,9 @@ class _DoctorProfileView extends StatelessWidget {
               SizedBox(height: 16.h),
               _buildClinicInfoCard(context, profile),
               SizedBox(height: 16.h),
-              _buildAboutCard(context, profile),
+              _buildEducationCard(context, profile),
               SizedBox(height: 16.h),
-              _buildWorkingHoursCard(context, profile),
+              _buildAboutCard(context, profile),
               SizedBox(height: 100.h),
             ],
           ),
@@ -373,28 +373,71 @@ class _DoctorProfileView extends StatelessWidget {
     );
   }
 
-  Widget _buildWorkingHoursCard(BuildContext context, DoctorProfileEntity profile) {
+  Widget _buildEducationCard(BuildContext context, DoctorProfileEntity profile) {
     return InfoCard(
-      title: 'Working Hours',
-      icon: Icons.schedule_outlined,
+      title: 'Education',
+      icon: Icons.school_outlined,
       onEdit: () => _navigateToEditProfile(context, profile),
-      children: profile.workingHours.isEmpty
+      children: profile.education.isEmpty
           ? [
               Text(
-                'Set your working hours...',
+                'Add your education details...',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.textSecondary(context),
                       fontStyle: FontStyle.italic,
                     ),
               ),
             ]
-          : profile.workingHours
-              .where((wh) => wh.isAvailable)
-              .map((wh) => InfoRow(
-                    label: wh.day,
-                    value: wh.slots.isNotEmpty
-                        ? wh.slots.map((s) => '${s.startTime}-${s.endTime}').join(', ')
-                        : 'Available',
+          : profile.education
+              .map((edu) => Padding(
+                    padding: EdgeInsets.only(bottom: 12.h),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8.w),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8.r),
+                          ),
+                          child: Icon(
+                            Icons.school_rounded,
+                            color: AppColors.primary,
+                            size: 20.sp,
+                          ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                edu.degree,
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                              SizedBox(height: 2.h),
+                              Text(
+                                edu.institution,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: AppColors.textSecondary(context),
+                                    ),
+                              ),
+                              if (edu.year != null) ...[
+                                SizedBox(height: 2.h),
+                                Text(
+                                  edu.year.toString(),
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppColors.textSecondary(context),
+                                      ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ))
               .toList(),
     );

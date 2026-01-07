@@ -9,6 +9,7 @@ export 'custom_button.dart';
 export 'custom_date_picker.dart';
 export 'custom_dropdown.dart';
 export 'custom_text_field.dart';
+export 'error_state_widget.dart';
 export 'info_card.dart';
 export 'no_connection_widget.dart';
 export 'profile_avatar.dart';

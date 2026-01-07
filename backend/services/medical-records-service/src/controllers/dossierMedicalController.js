@@ -1,7 +1,7 @@
 import MedicalDocument from '../models/MedicalDocument.js';
 import Consultation from '../models/Consultation.js';
 import Prescription from '../models/Prescription.js';
-import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess } from '../../../../shared/index.js';
+import { kafkaProducer, TOPICS, createEvent, sendError, sendSuccess, getConfig } from '../../../../shared/index.js';
 import {
     uploadDocumentToS3,
     getSignedUrl,
@@ -12,13 +12,32 @@ import { formatDocumentList } from '../utils/documentHelpers.js';
 
 // Helper to check if doctor has appointment relationship with patient
 const checkDoctorPatientRelationship = async (doctorId, patientId) => {
-    // Check if doctor has any confirmed or completed consultation with this patient
+    // First check if doctor has any completed consultation with this patient
     const consultation = await Consultation.findOne({
         doctorId,
         patientId,
         status: { $in: ['completed', 'archived'] }
     });
-    return !!consultation;
+    
+    if (consultation) return true;
+    
+    // If no completed consultation, check if there's a confirmed/scheduled appointment
+    // via rdv-service API call
+    try {
+        const rdvServiceUrl = getConfig('RDV_SERVICE_URL', 'http://rdv-service:3003');
+        const response = await fetch(
+            `${rdvServiceUrl}/api/v1/appointments/check-relationship?doctorId=${doctorId}&patientId=${patientId}`
+        );
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.hasAppointment === true;
+        }
+    } catch (error) {
+        console.error('Failed to check appointment relationship:', error.message);
+    }
+    
+    return false;
 };
 
 /**

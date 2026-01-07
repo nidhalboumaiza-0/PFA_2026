@@ -4,7 +4,14 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../injection_container.dart';
+import '../../../appointments/domain/entities/appointment_entity.dart';
+import '../../../appointments/presentation/bloc/doctor/doctor_appointment_bloc.dart';
+import '../../../messaging/presentation/bloc/messaging_bloc.dart';
+import '../../../messaging/presentation/bloc/messaging_event.dart';
+import '../../../messaging/presentation/bloc/messaging_state.dart';
 import '../../../messaging/presentation/screens/conversations_screen.dart';
+import '../../../notifications/presentation/bloc/notification_bloc.dart';
+import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../profile/presentation/blocs/doctor_profile/doctor_profile_bloc.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 
@@ -24,12 +31,30 @@ class DoctorDashboardContent extends StatefulWidget {
 
 class _DoctorDashboardContentState extends State<DoctorDashboardContent> {
   late final DoctorProfileBloc _profileBloc;
+  late final MessagingBloc _messagingBloc;
+  late final DoctorAppointmentBloc _appointmentBloc;
+  
+  // Cache statistics to preserve them when appointment state changes
+  int _cachedTodayCount = 0;
+  int _cachedPendingCount = 0;
+  int _cachedCompletedCount = 0;
+  bool _statisticsLoaded = false;
   
   @override
   void initState() {
     super.initState();
     _profileBloc = sl<DoctorProfileBloc>();
     _profileBloc.add(LoadDoctorProfile());
+    
+    // Get messaging bloc and fetch unread count
+    _messagingBloc = sl<MessagingBloc>();
+    _messagingBloc.add(const GetUnreadCount());
+    
+    // Get appointment bloc and fetch statistics
+    _appointmentBloc = sl<DoctorAppointmentBloc>();
+    _appointmentBloc.add(const LoadAppointmentStatistics());
+    // Also load today's appointments
+    _appointmentBloc.add(LoadDoctorAppointments(date: DateTime.now()));
   }
   
   @override
@@ -58,33 +83,73 @@ class _DoctorDashboardContentState extends State<DoctorDashboardContent> {
               centerTitle: true,
             ),
             actions: [
-              IconButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ConversationsScreen(),
-                    ),
+              // Messages icon with unread badge
+              BlocBuilder<MessagingBloc, MessagingState>(
+                bloc: _messagingBloc,
+                buildWhen: (previous, current) => 
+                  current is UnreadCountLoaded || current is ConversationsLoaded,
+                builder: (context, state) {
+                  final unreadCount = _messagingBloc.unreadCount;
+                  return IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ConversationsScreen(),
+                        ),
+                      );
+                    },
+                    icon: unreadCount > 0
+                        ? Badge(
+                            label: unreadCount > 99 
+                                ? const Text('99+') 
+                                : Text(unreadCount.toString()),
+                            child: Icon(
+                              Icons.chat_bubble_outline,
+                              size: 24.sp,
+                            ),
+                          )
+                        : Icon(
+                            Icons.chat_bubble_outline,
+                            size: 24.sp,
+                          ),
+                    tooltip: 'Messages',
                   );
                 },
-                icon: Badge(
-                  smallSize: 8.r,
-                  child: Icon(
-                    Icons.chat_bubble_outline,
-                    size: 24.sp,
-                  ),
-                ),
-                tooltip: 'Messages',
               ),
-              IconButton(
-                onPressed: () {
-                  // TODO: Navigate to notifications
-                },
-                icon: Badge(
-                  smallSize: 8.r,
-                  child: Icon(
-                    Icons.notifications_outlined,
-                    size: 24.sp,
-                  ),
+              // Notifications icon with real unread count
+              BlocProvider(
+                create: (_) => sl<NotificationBloc>()..add(const RefreshUnreadCount()),
+                child: BlocBuilder<NotificationBloc, NotificationState>(
+                  builder: (context, state) {
+                    final unreadCount = state is NotificationsLoaded 
+                        ? state.unreadCount 
+                        : 0;
+                    return IconButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
+                      icon: unreadCount > 0
+                          ? Badge(
+                              label: unreadCount > 99
+                                  ? const Text('99+')
+                                  : Text(unreadCount.toString()),
+                              child: Icon(
+                                Icons.notifications_outlined,
+                                size: 24.sp,
+                              ),
+                            )
+                          : Icon(
+                              Icons.notifications_outlined,
+                              size: 24.sp,
+                            ),
+                      tooltip: 'Notifications',
+                    );
+                  },
                 ),
               ),
               SizedBox(width: 8.w),
@@ -104,21 +169,11 @@ class _DoctorDashboardContentState extends State<DoctorDashboardContent> {
                   SizedBox(height: 24.h),
                   _buildSectionTitle(context, 'Today\'s Appointments'),
                   SizedBox(height: 12.h),
-                  _buildEmptyState(
-                    context,
-                    icon: Icons.calendar_today_outlined,
-                    title: 'No appointments today',
-                    subtitle: 'Your schedule is clear',
-                  ),
+                  _buildTodayAppointments(context),
                   SizedBox(height: 24.h),
-                  _buildSectionTitle(context, 'Recent Patients'),
+                  _buildSectionTitle(context, 'Pending Requests'),
                   SizedBox(height: 12.h),
-                  _buildEmptyState(
-                    context,
-                    icon: Icons.people_outline,
-                    title: 'No recent patients',
-                    subtitle: 'Patient consultations will appear here',
-                  ),
+                  _buildPendingRequests(context),
                   SizedBox(height: 100.h), // Extra space for bottom nav
                 ],
               ),
@@ -237,14 +292,74 @@ class _DoctorDashboardContentState extends State<DoctorDashboardContent> {
   }
 
   Widget _buildQuickStats(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _buildStatCard(context, '0', 'Today', Icons.calendar_today, AppColors.primary)),
-        SizedBox(width: 12.w),
-        Expanded(child: _buildStatCard(context, '0', 'Pending', Icons.pending_actions, AppColors.warning)),
-        SizedBox(width: 12.w),
-        Expanded(child: _buildStatCard(context, '0', 'Completed', Icons.check_circle_outline, AppColors.success)),
-      ],
+    return BlocConsumer<DoctorAppointmentBloc, DoctorAppointmentState>(
+      bloc: _appointmentBloc,
+      listenWhen: (previous, current) => current is StatisticsLoaded,
+      listener: (context, state) {
+        // Cache statistics when loaded so they persist across state changes
+        if (state is StatisticsLoaded) {
+          setState(() {
+            _cachedTodayCount = state.statistics.todayAppointments;
+            _cachedPendingCount = state.statistics.pendingCount;
+            _cachedCompletedCount = state.statistics.completedCount;
+            _statisticsLoaded = true;
+          });
+        }
+      },
+      buildWhen: (previous, current) {
+        // Always rebuild when StatisticsLoaded is emitted (even if same type)
+        if (current is StatisticsLoaded) return true;
+        if (current is StatisticsLoading) return true;
+        if (current is DoctorAppointmentsLoaded) return true;
+        return false;
+      },
+      builder: (context, state) {
+        int todayCount = _cachedTodayCount;
+        int pendingCount = _cachedPendingCount;
+        int completedCount = _cachedCompletedCount;
+        
+        if (state is StatisticsLoaded) {
+          todayCount = state.statistics.todayAppointments;
+          pendingCount = state.statistics.pendingCount;
+          completedCount = state.statistics.completedCount;
+        } else if (state is DoctorAppointmentsLoaded && !_statisticsLoaded) {
+          // Only use fallback if statistics haven't been loaded yet
+          todayCount = state.todayAppointments.length;
+          pendingCount = state.appointments.where((a) => a.isPending).length;
+          completedCount = state.appointments.where((a) => a.status == AppointmentStatus.completed).length;
+        }
+        // If statistics were loaded, keep using cached values
+        
+        final isLoading = state is StatisticsLoading;
+        
+        return Row(
+          children: [
+            Expanded(child: _buildStatCard(
+              context, 
+              isLoading ? '...' : todayCount.toString(), 
+              'Today', 
+              Icons.calendar_today, 
+              AppColors.primary,
+            )),
+            SizedBox(width: 12.w),
+            Expanded(child: _buildStatCard(
+              context, 
+              isLoading ? '...' : pendingCount.toString(), 
+              'Pending', 
+              Icons.pending_actions, 
+              AppColors.warning,
+            )),
+            SizedBox(width: 12.w),
+            Expanded(child: _buildStatCard(
+              context, 
+              isLoading ? '...' : completedCount.toString(), 
+              'Completed', 
+              Icons.check_circle_outline, 
+              AppColors.success,
+            )),
+          ],
+        );
+      },
     );
   }
 
@@ -440,6 +555,184 @@ class _DoctorDashboardContentState extends State<DoctorDashboardContent> {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTodayAppointments(BuildContext context) {
+    return BlocBuilder<DoctorAppointmentBloc, DoctorAppointmentState>(
+      bloc: _appointmentBloc,
+      buildWhen: (previous, current) => 
+        current is DoctorAppointmentsLoaded || 
+        current is DoctorAppointmentsLoading,
+      builder: (context, state) {
+        if (state is DoctorAppointmentsLoading) {
+          return _buildLoadingCard(context);
+        }
+        
+        if (state is DoctorAppointmentsLoaded) {
+          final todayAppointments = state.todayAppointments;
+          
+          if (todayAppointments.isEmpty) {
+            return _buildEmptyState(
+              context,
+              icon: Icons.calendar_today_outlined,
+              title: 'No appointments today',
+              subtitle: 'Your schedule is clear',
+            );
+          }
+          
+          return _buildAppointmentsList(context, todayAppointments.take(3).toList());
+        }
+        
+        return _buildEmptyState(
+          context,
+          icon: Icons.calendar_today_outlined,
+          title: 'No appointments today',
+          subtitle: 'Your schedule is clear',
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingRequests(BuildContext context) {
+    return BlocBuilder<DoctorAppointmentBloc, DoctorAppointmentState>(
+      bloc: _appointmentBloc,
+      buildWhen: (previous, current) => 
+        current is DoctorAppointmentsLoaded || 
+        current is StatisticsLoaded,
+      builder: (context, state) {
+        if (state is DoctorAppointmentsLoaded) {
+          final pendingAppointments = state.appointments.where((a) => a.isPending).toList();
+          
+          if (pendingAppointments.isEmpty) {
+            return _buildEmptyState(
+              context,
+              icon: Icons.pending_actions_outlined,
+              title: 'No pending requests',
+              subtitle: 'All appointment requests have been handled',
+            );
+          }
+          
+          return _buildAppointmentsList(context, pendingAppointments.take(3).toList());
+        }
+        
+        return _buildEmptyState(
+          context,
+          icon: Icons.pending_actions_outlined,
+          title: 'No pending requests',
+          subtitle: 'All appointment requests have been handled',
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: EdgeInsets.all(24.w),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surface(context) : Colors.white,
+        borderRadius: BorderRadius.circular(20.r),
+      ),
+      child: Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2.w,
+          color: AppColors.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppointmentsList(BuildContext context, List<dynamic> appointments) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surface(context) : Colors.white,
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.2)
+                : AppColors.shadow(context).withValues(alpha: 0.08),
+            blurRadius: 20.r,
+            offset: Offset(0, 8.h),
+          ),
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: appointments.length,
+        separatorBuilder: (_, __) => Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
+        itemBuilder: (context, index) {
+          final appointment = appointments[index];
+          final patientName = appointment.patientInfo != null 
+              ? '${appointment.patientInfo!.firstName} ${appointment.patientInfo!.lastName}'
+              : 'Patient';
+          return ListTile(
+            contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+            leading: CircleAvatar(
+              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+              child: Icon(
+                Icons.person_outline,
+                color: AppColors.primary,
+                size: 24.sp,
+              ),
+            ),
+            title: Text(
+              patientName,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              '${appointment.appointmentTime} - ${appointment.reason ?? 'Consultation'}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary(context),
+              ),
+            ),
+            trailing: _buildStatusChip(context, appointment.status.displayName),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(BuildContext context, String status) {
+    Color color;
+    switch (status.toLowerCase()) {
+      case 'pending':
+        color = AppColors.warning;
+        break;
+      case 'confirmed':
+        color = AppColors.info;
+        break;
+      case 'completed':
+        color = AppColors.success;
+        break;
+      case 'cancelled':
+        color = AppColors.error;
+        break;
+      default:
+        color = AppColors.textSecondary(context);
+    }
+    
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8.r),
+      ),
+      child: Text(
+        status.substring(0, 1).toUpperCase() + status.substring(1),
+        style: TextStyle(
+          color: color,
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

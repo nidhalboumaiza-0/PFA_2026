@@ -93,13 +93,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
       _log('login', 'Response received: ${response.keys}');
 
-      // Response has user, accessToken, refreshToken, sessionId at root level
-      _log('login', 'Parsing user from: ${response['user']}');
-      final user = UserModel.fromJson(response['user']);
+      // Backend wraps response in { success, message, data: {...} }
+      // Extract the data object which contains user, accessToken, refreshToken, sessionId
+      final data = response['data'] as Map<String, dynamic>? ?? response;
+      _log('login', 'Parsing user from: ${data['user']}');
+      final user = UserModel.fromJson(data['user']);
       _log('login', 'User parsed: ${user.email}, role: ${user.role}');
       
       _log('login', 'Parsing tokens...');
-      final tokens = AuthTokensModel.fromJson(response);
+      final tokens = AuthTokensModel.fromJson(data);
       _log('login', 'Tokens parsed, sessionId: ${tokens.sessionId}');
 
       return (user, tokens);

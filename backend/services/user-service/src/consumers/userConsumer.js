@@ -1,6 +1,7 @@
 import { KafkaConsumer, TOPICS } from '../../../../shared/index.js';
 import Patient from '../models/Patient.js';
 import Doctor from '../models/Doctor.js';
+import { emitNewUserRegistration } from '../socket/index.js';
 
 /**
  * Initialize Kafka consumer for user service
@@ -44,6 +45,17 @@ export const initializeConsumer = async () => {
         const patient = await Patient.create(patientData);
         console.log(`✅ Created patient profile: ${patient._id}`);
 
+        // Emit real-time event to admin dashboard
+        emitNewUserRegistration({
+          profileId: patient._id,
+          userId,
+          email,
+          userType: 'patient',
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          createdAt: patient.createdAt
+        });
+
       } else if (role === 'doctor') {
         const existingDoctor = await Doctor.findOne({ userId });
         if (existingDoctor) {
@@ -71,6 +83,19 @@ export const initializeConsumer = async () => {
 
         const doctor = await Doctor.create(doctorData);
         console.log(`✅ Created doctor profile: ${doctor._id}`);
+
+        // Emit real-time event to admin dashboard
+        emitNewUserRegistration({
+          profileId: doctor._id,
+          userId,
+          email,
+          userType: 'doctor',
+          firstName: doctor.firstName,
+          lastName: doctor.lastName,
+          specialty: doctor.specialty,
+          isVerified: false,
+          createdAt: doctor.createdAt
+        });
       }
 
     } catch (error) {

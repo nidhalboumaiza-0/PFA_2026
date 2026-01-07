@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../injection_container.dart';
 import '../../../appointments/presentation/screens/doctor_appointments_screen.dart';
 import '../../../appointments/presentation/screens/doctor_availability_screen.dart';
+import '../../../messaging/presentation/bloc/messaging_bloc.dart';
+import '../../../messaging/presentation/bloc/messaging_event.dart';
+import '../../../messaging/presentation/bloc/messaging_state.dart';
 import '../../../profile/presentation/screens/doctor_profile_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 
@@ -16,6 +21,13 @@ class DoctorDashboardScreen extends StatefulWidget {
 
 class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   int _selectedNavIndex = 0;
+  late final MessagingBloc _messagingBloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _messagingBloc = sl<MessagingBloc>()..add(const GetUnreadCount());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,17 +52,28 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 centerTitle: true,
               ),
               actions: [
-                IconButton(
-                  onPressed: () {
-                    // TODO: Navigate to notifications
+                BlocBuilder<MessagingBloc, MessagingState>(
+                  bloc: _messagingBloc,
+                  builder: (context, state) {
+                    final unreadCount = _messagingBloc.unreadCount;
+                    return IconButton(
+                      onPressed: () {
+                        // TODO: Navigate to notifications
+                      },
+                      icon: unreadCount > 0
+                          ? Badge(
+                              label: Text(unreadCount > 99 ? '99+' : unreadCount.toString()),
+                              child: Icon(
+                                Icons.notifications_outlined,
+                                size: 24.sp,
+                              ),
+                            )
+                          : Icon(
+                              Icons.notifications_outlined,
+                              size: 24.sp,
+                            ),
+                    );
                   },
-                  icon: Badge(
-                    smallSize: 8.r,
-                    child: Icon(
-                      Icons.notifications_outlined,
-                      size: 24.sp,
-                    ),
-                  ),
                 ),
                 SizedBox(width: 8.w),
               ],

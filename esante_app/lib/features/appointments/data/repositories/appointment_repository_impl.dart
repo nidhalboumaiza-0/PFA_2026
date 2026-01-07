@@ -3,6 +3,8 @@ import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_list.dart';
 import '../../domain/entities/appointment_entity.dart';
 import '../../domain/entities/document_entity.dart';
 import '../../domain/entities/time_slot_entity.dart';
@@ -16,10 +18,12 @@ import '../models/time_slot_model.dart';
 class AppointmentRepositoryImpl implements AppointmentRepository {
   final AppointmentRemoteDataSource remoteDataSource;
   final AppointmentLocalDataSource localDataSource;
+  final ApiClient apiClient;
 
   AppointmentRepositoryImpl({
     required this.remoteDataSource,
     required this.localDataSource,
+    required this.apiClient,
   });
 
   void _log(String method, String message) {
@@ -595,22 +599,25 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
   Future<Either<Failure, String>> uploadDocumentFile({
     required String filePath,
     required String fileName,
+    required String appointmentId,
   }) async {
     try {
-      _log('uploadDocumentFile', 'Uploading file: $fileName');
+      _log('uploadDocumentFile', 'Uploading file: $fileName for appointment: $appointmentId');
       
-      // For now, we'll use a simple file upload approach
-      // In production, this would upload to S3 or similar storage
-      // and return the URL
+      final file = File(filePath);
       
-      // Mock implementation - in real app, upload to cloud storage
-      // The backend expects a URL, so we'd need a separate upload endpoint
-      // or use a service like AWS S3, Cloudinary, etc.
+      final response = await apiClient.uploadFile(
+        ApiList.appointmentUploadDocument,
+        file: file,
+        fileFieldName: 'file',
+        additionalData: {
+          'appointmentId': appointmentId,
+        },
+      );
       
-      // For development, we can use a placeholder approach
-      // where the app shows local files and uploads when appointment is created
-      
-      return Right('file://$filePath');
+      final url = response['url'] as String;
+      _log('uploadDocumentFile', 'Upload successful: $url');
+      return Right(url);
     } catch (e) {
       _log('uploadDocumentFile', 'Error: $e');
       return Left(_mapExceptionToFailure(e));

@@ -17,6 +17,7 @@ class SendFileMessageUseCase
   Future<Either<Failure, MessageEntity>> call(SendFileMessageParams params) {
     return repository.sendFileMessage(
       conversationId: params.conversationId,
+      receiverId: params.receiverId,
       file: params.file,
       caption: params.caption,
     );
@@ -26,15 +27,17 @@ class SendFileMessageUseCase
 /// Parameters for SendFileMessageUseCase
 class SendFileMessageParams extends Equatable {
   final String conversationId;
+  final String receiverId;
   final File file;
   final String? caption;
 
   const SendFileMessageParams({
     required this.conversationId,
+    required this.receiverId,
     required this.file,
     this.caption,
   });
 
   @override
-  List<Object?> get props => [conversationId, file.path, caption];
+  List<Object?> get props => [conversationId, receiverId, file.path, caption];
 }
